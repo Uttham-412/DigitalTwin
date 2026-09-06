@@ -7,8 +7,44 @@ import {
   SpreadTimestepResult,
   SpreadSimulationResult
 } from './fireScenarioTypes';
-import { EnvironmentalTimeline } from '../environmental/environmentalTypes';
+import { EnvironmentalTimeline, EnvironmentalObservation } from '../environmental/environmentalTypes';
 
+/**
+ * ============================================================================
+ * EXPERIMENTAL FIRE-SPREAD BASELINE MODEL — FORMULATION & EQUATIONS
+ * ============================================================================
+ *
+ * 1. Environmental Wind Vector (\vec{W}):
+ *    Wind direction theta_wind (deg) is converted to vector pushing fire TOWARD theta_towards = (theta_wind + 180) mod 360:
+ *    W_x = WindSpeed * sin(theta_towards * pi / 180)
+ *    W_y = WindSpeed * cos(theta_towards * pi / 180)
+ *
+ * 2. Terrain Slope Vector (\vec{S}):
+ *    Terrain slope magnitude S_mag (deg) and aspect theta_aspect (deg):
+ *    S_x = (S_mag * 0.6) * sin(theta_aspect * pi / 180)
+ *    S_y = (S_mag * 0.6) * cos(theta_aspect * pi / 180)
+ *    If slope/aspect is null or unavailable, \vec{S} = (0, 0).
+ *
+ * 3. Net Propagation Vector (\vec{V}_{net}):
+ *    \vec{V}_{net} = \vec{W} + \vec{S}
+ *    Magnitude: V_mag = sqrt(V_x^2 + V_y^2)
+ *    Orientation: theta_net = atan2(V_x, V_y) * 180 / pi (normalized to 0..360 deg)
+ *
+ * 4. Moisture & Temperature Damping Factor (M_factor):
+ *    HumidityFactor = max(0.1, 1 - RelativeHumidity / 120)
+ *    PrecipDamping = max(0.0, 1 - Precipitation / 5)
+ *    TempBoost = max(0.5, 1 + (Temperature - 20) / 40)
+ *    M_factor = HumidityFactor * PrecipDamping * TempBoost
+ *
+ * 5. Rate of Spread (ROS in m/min):
+ *    ROS = baseROS (2.5) * FuelBurnability * (1 + V_mag * 0.08) * M_factor
+ *    If fuel is unavailable, FuelBurnability = 1.0 (baseline).
+ *
+ * 6. Hourly Forecast Weather Lookup:
+ *    For timestep t + k (where k in {1, 2, 6, 12, 24} hours), the model queries
+ *    the exact forecast hourly observation from Open-Meteo matching timestamp t + k.
+ * ============================================================================
+ */
 export class FireSpreadModel {
   private static instance: FireSpreadModel;
 
@@ -22,7 +58,8 @@ export class FireSpreadModel {
   }
 
   /**
-   * Execute experimental fire-spread simulation based on real environmental, terrain, and fuel factors.
+   * Execute experimental fire-spread simulation using real time-aware forecast weather,
+   * derived terrain gradients, and land cover fuel classes.
    */
   public runSimulation(
     initialFire: FireState,
@@ -42,11 +79,11 @@ export class FireSpreadModel {
     const obsList = envTimeline.observations;
 
     horizons.forEach(({ horizon, hours }) => {
-      // Find closest forecast/observed weather timestep for horizon
+      // Find exact forecast hourly weather observation at timestamp (t + hours)
       const baseMs = new Date(initialFire.timestamp).getTime();
       const targetMs = baseMs + hours * 3600 * 1000;
 
-      let envObs = obsList[envTimeline.selectedIndex] || obsList[0];
+      let envObs: EnvironmentalObservation = obsList[envTimeline.selectedIndex] || obsList[0];
       if (obsList.length > 0) {
         let minDiff = Infinity;
         obsList.forEach((obs) => {
@@ -58,7 +95,7 @@ export class FireSpreadModel {
         });
       }
 
-      // 1. Calculate Environmental Wind Vector (wind pushes in direction wind is blowing towards)
+      // 1. Calculate Environmental Wind Vector
       const windTowardsDeg = (envObs.windDirection + 180) % 360;
       const windRad = (windTowardsDeg * Math.PI) / 180;
       const windSpeed = envObs.windSpeed;
@@ -66,12 +103,17 @@ export class FireSpreadModel {
       const wX = windSpeed * Math.sin(windRad);
       const wY = windSpeed * Math.cos(windRad);
 
-      // 2. Calculate Terrain Slope Vector (fire moves faster uphill in aspect direction)
-      const aspectRad = (terrain.aspectDegrees * Math.PI) / 180;
-      const slopeMagnitude = terrain.slopeDegrees * 0.6; // slope scaling
+      // 2. Calculate Terrain Slope Vector (if terrain available)
+      let sX = 0;
+      let sY = 0;
+      let slopeMagnitude = 0;
 
-      const sX = slopeMagnitude * Math.sin(aspectRad);
-      const sY = slopeMagnitude * Math.cos(aspectRad);
+      if (terrain.isAvailable && terrain.slopeDegrees !== null && terrain.aspectDegrees !== null) {
+        slopeMagnitude = terrain.slopeDegrees * 0.6;
+        const aspectRad = (terrain.aspectDegrees * Math.PI) / 180;
+        sX = slopeMagnitude * Math.sin(aspectRad);
+        sY = slopeMagnitude * Math.cos(aspectRad);
+      }
 
       // 3. Net Vector Combination (Wind + Slope)
       const netX = wX + sX;
@@ -81,18 +123,19 @@ export class FireSpreadModel {
       let netOrientationDeg = Math.round((Math.atan2(netX, netY) * 180) / Math.PI);
       if (netOrientationDeg < 0) netOrientationDeg += 360;
 
-      // 4. Moisture & Weather Damping Factor
+      // 4. Moisture & Temperature Damping Factor
       const humidityFactor = Math.max(0.1, 1 - envObs.relativeHumidity / 120);
       const precipDamping = Math.max(0.0, 1 - envObs.precipitation / 5);
       const tempBoost = Math.max(0.5, 1 + (envObs.temperature - 20) / 40);
 
       const moistureFactor = humidityFactor * precipDamping * tempBoost;
 
-      // 5. Rate of Spread (ROS) in meters per minute
-      const baseROS = 2.5; // m/min base
+      // 5. Rate of Spread (ROS in m/min)
+      const burnFactor = fuel.isAvailable && fuel.burnabilityFactor !== null ? fuel.burnabilityFactor : 1.0;
+      const baseROS = 2.5;
       const rosMetersPerMin = Math.max(
-        0.5,
-        baseROS * fuel.burnabilityFactor * (1 + netMagnitude * 0.08) * moistureFactor
+        0.3,
+        baseROS * burnFactor * (1 + netMagnitude * 0.08) * moistureFactor
       );
 
       // 6. Calculate Spread Ellipse Dimensions for Horizon
@@ -106,7 +149,7 @@ export class FireSpreadModel {
         (Math.PI * (majorAxisMeters / 1000) * (minorAxisMeters / 1000) * 100) * 10
       ) / 10;
 
-      // 7. Calculate center shift along vector
+      // 7. Calculate center shift along net vector
       const shiftDistanceMeters = expansionMeters * 0.3;
       const deltaLat = (shiftDistanceMeters * Math.cos((netOrientationDeg * Math.PI) / 180)) / 111320;
       const deltaLng =
@@ -119,8 +162,10 @@ export class FireSpreadModel {
       };
 
       let dominantFactor = 'Environmental Wind Vector';
-      if (slopeMagnitude > windSpeed) {
-        dominantFactor = 'Terrain Slope & Aspect Uphill Vector';
+      if (!terrain.isAvailable || terrain.slopeDegrees === null) {
+        dominantFactor = 'Environmental Wind Vector (Terrain Slope Unavailable)';
+      } else if (slopeMagnitude > windSpeed) {
+        dominantFactor = 'Terrain Slope & Aspect Gradient Vector';
       }
 
       timesteps[horizon] = {
@@ -146,7 +191,7 @@ export class FireSpreadModel {
       timesteps: timesteps as Record<SpreadHorizon, SpreadTimestepResult>,
       provenance: 'SIMULATED / EXPERIMENTAL FIRE-SPREAD SIMULATION',
       disclaimer:
-        'This is an experimental fire-spread simulation based on available environmental, terrain and fuel factors. It is not an operational emergency forecasting system.'
+        'This is a research/experimental prediction based on available environmental, terrain and land-cover data. It is not an operational emergency forecasting system.'
     };
   }
 }

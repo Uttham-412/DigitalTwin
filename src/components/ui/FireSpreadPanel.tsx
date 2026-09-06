@@ -216,29 +216,134 @@ export const FireSpreadPanel: React.FC<FireSpreadPanelProps> = ({
             </div>
           </div>
 
-          {/* Terrain & Fuel Overview */}
+          {/* 1. SCENARIO SECTION */}
+          <div style={{ backgroundColor: 'rgba(30, 41, 59, 0.6)', padding: '10px', borderRadius: '8px', marginBottom: '10px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#FDBA74', letterSpacing: '0.05em', marginBottom: '4px' }}>
+              SCENARIO — SIMULATED IGNITION
+            </div>
+            <div style={{ fontSize: '11px', color: '#CBD5E1', lineHeight: 1.4 }}>
+              <div><strong>Location:</strong> {simulationResult.initialFireState.latitude.toFixed(4)}° N, {simulationResult.initialFireState.longitude.toFixed(4)}° E</div>
+              <div><strong>Timestamp:</strong> {new Date(simulationResult.initialFireState.timestamp).toLocaleString()}</div>
+              <div><strong>Provenance:</strong> {simulationResult.initialFireState.provenance}</div>
+            </div>
+          </div>
+
+          {/* 2. ENVIRONMENT SECTION */}
+          <div style={{ backgroundColor: 'rgba(30, 41, 59, 0.6)', padding: '10px', borderRadius: '8px', marginBottom: '10px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#38BDF8', letterSpacing: '0.05em', marginBottom: '4px' }}>
+              ENVIRONMENT (Open-Meteo)
+            </div>
+            <div style={{ fontSize: '11px', color: '#CBD5E1', lineHeight: 1.4 }}>
+              <div><strong>Temperature:</strong> {currentStep.environmentalState.temperature.toFixed(1)} °C</div>
+              <div><strong>Humidity:</strong> {currentStep.environmentalState.relativeHumidity}%</div>
+              <div><strong>Wind:</strong> {currentStep.environmentalState.windSpeed} km/h (Direction {currentStep.environmentalState.windDirection}° {currentStep.environmentalState.windDirectionCardinal})</div>
+              <div><strong>Precipitation:</strong> {currentStep.environmentalState.precipitation} mm</div>
+              <div><strong>Pressure:</strong> {currentStep.environmentalState.surfacePressure} hPa</div>
+            </div>
+          </div>
+
+          {/* 3. TERRAIN SECTION */}
+          <div style={{ backgroundColor: 'rgba(30, 41, 59, 0.6)', padding: '10px', borderRadius: '8px', marginBottom: '10px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#A7F3D0', letterSpacing: '0.05em', marginBottom: '4px' }}>
+              TERRAIN (Cesium 3D World DEM)
+            </div>
+            <div style={{ fontSize: '11px', color: '#CBD5E1', lineHeight: 1.4 }}>
+              {simulationResult.terrain.isAvailable ? (
+                <>
+                  <div><strong>Elevation:</strong> {simulationResult.terrain.elevationMeters !== null ? `${simulationResult.terrain.elevationMeters} m` : 'ELEVATION DATA UNAVAILABLE'}</div>
+                  <div><strong>Slope:</strong> {simulationResult.terrain.slopeDegrees !== null ? `${simulationResult.terrain.slopeDegrees}°` : 'SLOPE DATA UNAVAILABLE'}</div>
+                  <div><strong>Aspect:</strong> {simulationResult.terrain.aspectDegrees !== null ? `${simulationResult.terrain.aspectDegrees}° (${simulationResult.terrain.aspectCardinal})` : 'ASPECT DATA UNAVAILABLE'}</div>
+                </>
+              ) : (
+                <div style={{ color: '#EF4444', fontWeight: 600 }}>TERRAIN DATA UNAVAILABLE</div>
+              )}
+            </div>
+          </div>
+
+          {/* 4. VEGETATION / FUEL SECTION */}
+          <div style={{ backgroundColor: 'rgba(30, 41, 59, 0.6)', padding: '10px', borderRadius: '8px', marginBottom: '10px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#F472B6', letterSpacing: '0.05em', marginBottom: '4px' }}>
+              VEGETATION / FUEL
+            </div>
+            <div style={{ fontSize: '11px', color: '#CBD5E1', lineHeight: 1.4 }}>
+              {simulationResult.fuel.isAvailable ? (
+                <>
+                  <div><strong>Land Cover:</strong> {simulationResult.fuel.fuelClass}</div>
+                  <div><strong>Fuel Load:</strong> {simulationResult.fuel.fuelLoadTonsPerHectare !== null ? `${simulationResult.fuel.fuelLoadTonsPerHectare} t/ha (${simulationResult.fuel.isDerivedEstimate ? 'DERIVED ESTIMATE' : 'MEASURED'})` : 'FUEL LOAD DATA UNAVAILABLE'}</div>
+                  <div><strong>Burnability Coefficient:</strong> {simulationResult.fuel.burnabilityFactor !== null ? simulationResult.fuel.burnabilityFactor.toFixed(2) : 'DATA UNAVAILABLE'}</div>
+                </>
+              ) : (
+                <div style={{ color: '#EF4444', fontWeight: 600 }}>FUEL DATA UNAVAILABLE</div>
+              )}
+            </div>
+          </div>
+
+          {/* 5. FUTURE SPREAD SECTION */}
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ fontSize: '10px', color: '#94A3B8', marginBottom: '6px' }}>
+              PREDICTION HORIZON
+            </div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {(['+1H', '+2H', '+6H', '+12H', '+24H'] as SpreadHorizon[]).map((h) => (
+                <button
+                  key={h}
+                  onClick={() => onSelectHorizon(h)}
+                  style={{
+                    flex: 1,
+                    padding: '6px 0',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    borderRadius: '6px',
+                    border:
+                      selectedHorizon === h
+                        ? '1px solid #F97316'
+                        : '1px solid rgba(255, 255, 255, 0.1)',
+                    backgroundColor:
+                      selectedHorizon === h ? 'rgba(249, 115, 22, 0.25)' : 'rgba(30, 41, 59, 0.6)',
+                    color: selectedHorizon === h ? '#F97316' : '#94A3B8',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {h}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Primary Prediction Metrics */}
           <div
             style={{
-              fontSize: '11px',
-              color: '#94A3B8',
-              backgroundColor: 'rgba(0, 0, 0, 0.3)',
-              padding: '10px',
-              borderRadius: '8px',
-              marginBottom: '14px',
-              lineHeight: 1.5
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '8px',
+              marginBottom: '12px'
             }}
           >
-            <div>
-              <strong style={{ color: '#CBD5E1' }}>Terrain:</strong>{' '}
-              {simulationResult.terrain.elevationMeters}m elev | {simulationResult.terrain.slopeDegrees}° slope (Aspect: {simulationResult.terrain.aspectCardinal} {simulationResult.terrain.aspectDegrees}°)
+            <div
+              style={{
+                backgroundColor: 'rgba(30, 41, 59, 0.6)',
+                padding: '10px',
+                borderRadius: '8px'
+              }}
+            >
+              <div style={{ fontSize: '10px', color: '#94A3B8' }}>AFFECTED AREA</div>
+              <div style={{ fontSize: '18px', fontWeight: 800, color: '#F97316' }}>
+                {currentStep.affectedAreaHectares} <span style={{ fontSize: '12px' }}>ha</span>
+              </div>
             </div>
-            <div>
-              <strong style={{ color: '#CBD5E1' }}>Fuel Class:</strong>{' '}
-              {simulationResult.fuel.fuelClass} ({simulationResult.fuel.fuelLoadTonsPerHectare} t/ha)
-            </div>
-            <div>
-              <strong style={{ color: '#CBD5E1' }}>Spread Vector:</strong>{' '}
-              Heading {currentStep.orientationDegrees}° ({currentStep.dominantFactor})
+
+            <div
+              style={{
+                backgroundColor: 'rgba(30, 41, 59, 0.6)',
+                padding: '10px',
+                borderRadius: '8px'
+              }}
+            >
+              <div style={{ fontSize: '10px', color: '#94A3B8' }}>RATE OF SPREAD</div>
+              <div style={{ fontSize: '18px', fontWeight: 800, color: '#FDBA74' }}>
+                {currentStep.rateOfSpreadMetersPerMin} <span style={{ fontSize: '12px' }}>m/min</span>
+              </div>
             </div>
           </div>
 
@@ -248,7 +353,7 @@ export const FireSpreadPanel: React.FC<FireSpreadPanelProps> = ({
               backgroundColor: 'rgba(30, 41, 59, 0.8)',
               borderRadius: '10px',
               border: '1px solid rgba(249, 115, 22, 0.2)',
-              marginBottom: '14px',
+              marginBottom: '12px',
               overflow: 'hidden'
             }}
           >
@@ -291,7 +396,9 @@ export const FireSpreadPanel: React.FC<FireSpreadPanelProps> = ({
                 </div>
                 <div>
                   <strong style={{ color: '#A7F3D0' }}>TERRAIN EFFECT:</strong>{' '}
-                  {simulationResult.terrain.slopeDegrees}° slope toward {simulationResult.terrain.aspectCardinal}. Fire advances faster uphill along slope aspect.
+                  {simulationResult.terrain.isAvailable && simulationResult.terrain.slopeDegrees !== null
+                    ? `${simulationResult.terrain.slopeDegrees}° slope toward ${simulationResult.terrain.aspectCardinal}. Fire advances faster uphill along slope aspect.`
+                    : 'TERRAIN SLOPE DATA UNAVAILABLE (Computed on flat baseline)'}
                 </div>
                 <div>
                   <strong style={{ color: '#FDBA74' }}>MOISTURE & HUMIDITY:</strong>{' '}
@@ -299,7 +406,9 @@ export const FireSpreadPanel: React.FC<FireSpreadPanelProps> = ({
                 </div>
                 <div>
                   <strong style={{ color: '#F472B6' }}>FUEL AVAILABILITY:</strong>{' '}
-                  {simulationResult.fuel.fuelClass} (Factor {simulationResult.fuel.burnabilityFactor}). High biomass density supports continuous flame front propagation.
+                  {simulationResult.fuel.isAvailable
+                    ? `${simulationResult.fuel.fuelClass} (Factor ${simulationResult.fuel.burnabilityFactor ?? 'N/A'})`
+                    : 'FUEL DATA UNAVAILABLE (Baseline vegetation coefficient applied)'}
                 </div>
               </div>
             )}

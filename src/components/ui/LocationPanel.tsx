@@ -247,6 +247,21 @@ export const LocationPanel: React.FC<LocationPanelProps> = ({
           )}
         </div>
 
+        {/* U-Net Scientific Semantics Note */}
+        <div
+          style={{
+            fontSize: '0.66rem',
+            color: '#94A3B8',
+            backgroundColor: 'rgba(0, 0, 0, 0.3)',
+            padding: '6px 8px',
+            borderRadius: 'var(--radius-sm)',
+            borderLeft: '2px solid #38BDF8',
+            lineHeight: 1.35
+          }}
+        >
+          <strong>Scientific Note:</strong> The user-defined ignition establishes a hypothetical scenario condition. U-Net analysis independently processes available real Sentinel-2 multispectral satellite imagery.
+        </div>
+
         {/* Scenario Ignition & Spread Analysis Controls */}
         <div style={{ display: 'flex', gap: '8px', paddingTop: '4px' }}>
           {!isSimulatedFireActive ? (

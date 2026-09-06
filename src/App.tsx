@@ -209,7 +209,7 @@ export function App() {
       longitude: selectedLocation.longitude
     });
 
-    const fuel = fuelService.fetchFuelData({
+    const fuel = await fuelService.fetchFuelData({
       latitude: selectedLocation.latitude,
       longitude: selectedLocation.longitude
     });

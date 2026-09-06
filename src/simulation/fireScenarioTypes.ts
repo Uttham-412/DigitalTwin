@@ -15,19 +15,24 @@ export interface FireState {
 }
 
 export interface TerrainData {
-  elevationMeters: number;
-  slopeDegrees: number;
-  aspectDegrees: number;
-  aspectCardinal: string;
-  source: string; // e.g. "Cesium WGS84 / 3D World Terrain DEM"
+  elevationMeters: number | null;
+  slopeDegrees: number | null;
+  aspectDegrees: number | null;
+  aspectCardinal: string | null;
+  isAvailable: boolean;
+  source: string; // e.g. "Cesium 3D World Terrain DEM"
+  statusMessage?: string;
 }
 
 export interface FuelData {
-  fuelClass: string; // e.g. "Dense Forest", "Shrubland", "Grassland", "Urban / Built-Up", "Water Body"
-  burnabilityFactor: number; // 0.0 (non-burnable) to 1.0 (high fuel)
-  fuelLoadTonsPerHectare: number;
+  fuelClass: string; // e.g. "Tree Cover", "Shrubland", "Grassland", "DATA UNAVAILABLE"
+  burnabilityFactor: number | null; // 0.0 (non-burnable) to 1.0 (high fuel) or null if unavailable
+  fuelLoadTonsPerHectare: number | null;
   isBurnable: boolean;
+  isAvailable: boolean;
+  isDerivedEstimate?: boolean;
   source: string;
+  statusMessage?: string;
 }
 
 export interface SpreadTimestepResult {
