@@ -7,9 +7,21 @@ interface LocationPanelProps {
   location: SelectedLocation | null;
   onClear: () => void;
   onRunInference?: () => void;
+  isSimulatedFireActive?: boolean;
+  onCreateIgnition?: () => void;
+  onRemoveFire?: () => void;
+  onRunSpreadAnalysis?: () => void;
 }
 
-export const LocationPanel: React.FC<LocationPanelProps> = ({ location, onClear, onRunInference }) => {
+export const LocationPanel: React.FC<LocationPanelProps> = ({
+  location,
+  onClear,
+  onRunInference,
+  isSimulatedFireActive = false,
+  onCreateIgnition,
+  onRemoveFire,
+  onRunSpreadAnalysis
+}) => {
   if (!location) return null;
 
   const handleFlyTo = () => {
@@ -24,15 +36,15 @@ export const LocationPanel: React.FC<LocationPanelProps> = ({ location, onClear,
     <div
       className="glass-panel"
       style={{
-        position: 'absolute',
-        bottom: '24px',
-        left: '24px',
+        position: 'relative',
         width: '380px',
         maxWidth: 'calc(100vw - 48px)',
         padding: '20px',
         zIndex: 35,
         borderRadius: 'var(--radius-lg)',
-        border: '1px solid rgba(0, 229, 255, 0.25)',
+        border: isSimulatedFireActive
+          ? '1px solid rgba(249, 115, 22, 0.5)'
+          : '1px solid rgba(0, 229, 255, 0.25)',
         boxShadow: '0 12px 40px rgba(0, 0, 0, 0.6)',
         animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
       }}
@@ -59,18 +71,18 @@ export const LocationPanel: React.FC<LocationPanelProps> = ({ location, onClear,
               width: '32px',
               height: '32px',
               borderRadius: '50%',
-              background: 'rgba(0, 229, 255, 0.15)',
-              border: '1px solid var(--accent-cyan)',
+              background: isSimulatedFireActive ? 'rgba(249, 115, 22, 0.15)' : 'rgba(0, 229, 255, 0.15)',
+              border: isSimulatedFireActive ? '1px solid #F97316' : '1px solid var(--accent-cyan)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <MapPin size={18} color="var(--accent-cyan)" />
+            <MapPin size={18} color={isSimulatedFireActive ? '#F97316' : 'var(--accent-cyan)'} />
           </div>
           <div>
             <h2 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Selected Location
+              {location.label || 'Selected Location'}
             </h2>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
               Real-World Geographic Target
@@ -96,16 +108,20 @@ export const LocationPanel: React.FC<LocationPanelProps> = ({ location, onClear,
           gap: '6px',
           padding: '6px 10px',
           borderRadius: 'var(--radius-sm)',
-          background: 'rgba(16, 185, 129, 0.12)',
-          border: '1px solid rgba(16, 185, 129, 0.25)',
+          background: isSimulatedFireActive
+            ? 'rgba(249, 115, 22, 0.15)'
+            : 'rgba(16, 185, 129, 0.12)',
+          border: isSimulatedFireActive
+            ? '1px solid rgba(249, 115, 22, 0.35)'
+            : '1px solid rgba(16, 185, 129, 0.25)',
           marginBottom: '16px',
           fontSize: '0.72rem',
-          color: '#34d399',
-          fontWeight: 500,
+          color: isSimulatedFireActive ? '#FDBA74' : '#34d399',
+          fontWeight: 600,
         }}
       >
         <ShieldCheck size={14} />
-        <span>PROVENANCE: {location.classification} / USER_SELECTED</span>
+        <span>PROVENANCE: {isSimulatedFireActive ? 'SIMULATED / USER-DEFINED SCENARIO' : `${location.classification || 'OBSERVED'} / USER_SELECTED`}</span>
       </div>
 
       {/* Telemetry Grid */}
@@ -192,42 +208,105 @@ export const LocationPanel: React.FC<LocationPanelProps> = ({ location, onClear,
       </div>
 
       {/* Action Controls */}
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <button
-          onClick={handleFlyTo}
-          className="glass-button"
-          style={{
-            flex: 1,
-            padding: '8px 12px',
-            fontSize: '0.78rem',
-            fontWeight: 500,
-            gap: '6px',
-          }}
-        >
-          <Crosshair size={14} color="var(--accent-cyan)" />
-          Center Camera
-        </button>
-
-        {onRunInference && (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
           <button
-            onClick={onRunInference}
+            onClick={handleFlyTo}
             className="glass-button"
             style={{
-              flex: 1.4,
+              flex: 1,
               padding: '8px 12px',
               fontSize: '0.78rem',
-              fontWeight: 600,
+              fontWeight: 500,
               gap: '6px',
-              color: '#EF4444',
-              borderColor: 'rgba(239, 68, 68, 0.4)',
-              background: 'rgba(239, 68, 68, 0.1)'
             }}
-            title="Run U-Net AI Burned-Area Segmentation Inference"
           >
-            <ExternalLink size={14} color="#EF4444" />
-            Analyze with U-Net AI
+            <Crosshair size={14} color="var(--accent-cyan)" />
+            Center Camera
           </button>
-        )}
+
+          {onRunInference && (
+            <button
+              onClick={onRunInference}
+              className="glass-button"
+              style={{
+                flex: 1.4,
+                padding: '8px 12px',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                gap: '6px',
+                color: '#EF4444',
+                borderColor: 'rgba(239, 68, 68, 0.4)',
+                background: 'rgba(239, 68, 68, 0.1)'
+              }}
+              title="Run U-Net AI Burned-Area Segmentation Inference"
+            >
+              <ExternalLink size={14} color="#EF4444" />
+              Analyze with U-Net AI
+            </button>
+          )}
+        </div>
+
+        {/* Scenario Ignition & Spread Analysis Controls */}
+        <div style={{ display: 'flex', gap: '8px', paddingTop: '4px' }}>
+          {!isSimulatedFireActive ? (
+            <button
+              onClick={onCreateIgnition}
+              className="glass-button"
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                color: '#F97316',
+                borderColor: 'rgba(249, 115, 22, 0.5)',
+                background: 'rgba(249, 115, 22, 0.15)'
+              }}
+              title="Place a hypothetical ignition point at selected location"
+            >
+              🔥 CREATE FIRE SCENARIO
+            </button>
+          ) : (
+            <>
+              {onRunSpreadAnalysis && (
+                <button
+                  onClick={onRunSpreadAnalysis}
+                  className="glass-button"
+                  style={{
+                    flex: 1.2,
+                    padding: '8px 10px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    color: '#FDBA74',
+                    borderColor: 'rgba(249, 115, 22, 0.6)',
+                    background: 'rgba(249, 115, 22, 0.25)'
+                  }}
+                  title="Calculate fire spread simulation based on environmental & terrain vectors"
+                >
+                  ⚡ SPREAD ANALYSIS
+                </button>
+              )}
+              {onRemoveFire && (
+                <button
+                  onClick={onRemoveFire}
+                  className="glass-button"
+                  style={{
+                    flex: 0.8,
+                    padding: '8px 10px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    color: '#94A3B8',
+                    borderColor: 'rgba(255, 255, 255, 0.15)',
+                    background: 'rgba(30, 41, 59, 0.6)'
+                  }}
+                  title="Remove simulated fire ignition and clear scenario"
+                >
+                  REMOVE FIRE
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

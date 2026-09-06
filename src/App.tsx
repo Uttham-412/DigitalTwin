@@ -10,16 +10,26 @@ import { EMSR239InfoPanel } from './components/ui/EMSR239InfoPanel';
 import { EnvironmentalPanel } from './components/ui/EnvironmentalPanel';
 import { EnvironmentalFocusControl } from './components/map/EnvironmentalFocusControl';
 import { UNetInferencePanel } from './components/ui/UNetInferencePanel';
+import { FireSpreadPanel } from './components/ui/FireSpreadPanel';
 import { SelectedLocation } from './geospatial/coordinates';
 import { SelectionMarkerManager } from './cesium/selectionMarker';
 import { FireMarkerManager } from './cesium/fireMarker';
 import { WildfireLayerManager } from './cesium/wildfireLayer';
+import { SpreadLayerManager } from './cesium/spreadLayer';
 import { CesiumViewerManager } from './cesium/viewer';
 import { ImageryType, setImageryLayer } from './cesium/imagery';
 import { AMAZON_REAL_WILDFIRE_OBSERVATIONS } from './wildfire/fireObservation';
 import { environmentalService } from './environmental/environmentalService';
 import { EnvironmentalTimeline } from './environmental/environmentalTypes';
 import { unetInferenceService, UNetInferenceResponse } from './services/unetInferenceService';
+import { terrainService } from './geospatial/terrainService';
+import { fuelService } from './geospatial/fuelService';
+import { fireSpreadModel } from './simulation/fireSpreadModel';
+import {
+  FireState,
+  SpreadHorizon,
+  SpreadSimulationResult
+} from './simulation/fireScenarioTypes';
 
 export function App() {
   const [coordinates, setCoordinates] = useState<string>('---, ---');
@@ -38,6 +48,12 @@ export function App() {
   // U-Net Inference State
   const [inferenceResult, setInferenceResult] = useState<UNetInferenceResponse | null>(null);
   const [isInferenceLoading, setIsInferenceLoading] = useState<boolean>(false);
+
+  // Simulated Fire & Spread Scenario State
+  const [isSimulatedFireActive, setIsSimulatedFireActive] = useState<boolean>(false);
+  const [spreadResult, setSpreadResult] = useState<SpreadSimulationResult | null>(null);
+  const [selectedHorizon, setSelectedHorizon] = useState<SpreadHorizon>('+1H');
+  const [isSpreadLoading, setIsSpreadLoading] = useState<boolean>(false);
 
   const activeFireObservation = AMAZON_REAL_WILDFIRE_OBSERVATIONS[0];
 
@@ -127,10 +143,13 @@ export function App() {
   const handleClearLocation = useCallback(() => {
     setSelectedLocation(null);
     setInferenceResult(null);
+    setIsSimulatedFireActive(false);
+    setSpreadResult(null);
     const manager = CesiumViewerManager.getInstance();
     const viewer = manager.getViewer();
     if (viewer) {
       SelectionMarkerManager.getInstance().clear(viewer);
+      SpreadLayerManager.getInstance().clearSpread(viewer);
     }
   }, []);
 
@@ -162,6 +181,73 @@ export function App() {
     setInferenceResult(res);
     setIsInferenceLoading(false);
   }, [selectedLocation]);
+
+  // Scenario Lifecycle: Create Ignition
+  const handleCreateIgnition = useCallback(() => {
+    setIsSimulatedFireActive(true);
+    setSpreadResult(null);
+  }, []);
+
+  // Scenario Lifecycle: Remove Fire / Clear Scenario
+  const handleRemoveFire = useCallback(() => {
+    setIsSimulatedFireActive(false);
+    setSpreadResult(null);
+    const manager = CesiumViewerManager.getInstance();
+    const viewer = manager.getViewer();
+    if (viewer) {
+      SpreadLayerManager.getInstance().clearSpread(viewer);
+    }
+  }, []);
+
+  // Scenario Lifecycle: Run Fire Spread Analysis
+  const handleRunSpreadAnalysis = useCallback(async () => {
+    if (!selectedLocation || !envTimeline) return;
+    setIsSpreadLoading(true);
+
+    const terrain = await terrainService.fetchTerrainData({
+      latitude: selectedLocation.latitude,
+      longitude: selectedLocation.longitude
+    });
+
+    const fuel = fuelService.fetchFuelData({
+      latitude: selectedLocation.latitude,
+      longitude: selectedLocation.longitude
+    });
+
+    const initialFire: FireState = {
+      id: `ign_${Date.now()}`,
+      source: 'SIMULATED',
+      latitude: selectedLocation.latitude,
+      longitude: selectedLocation.longitude,
+      radiusMeters: 150,
+      areaHectares: 7.1,
+      timestamp: selectedLocation.eventDate || new Date().toISOString(),
+      provenance: 'SIMULATED / USER-DEFINED SCENARIO'
+    };
+
+    const res = fireSpreadModel.runSimulation(initialFire, envTimeline, terrain, fuel);
+    setSpreadResult(res);
+    setIsSpreadLoading(false);
+
+    // Update 3D spread visualization on Cesium for current horizon
+    const manager = CesiumViewerManager.getInstance();
+    const viewer = manager.getViewer();
+    if (viewer && res.timesteps[selectedHorizon]) {
+      SpreadLayerManager.getInstance().renderSpreadPrediction(viewer, res.timesteps[selectedHorizon]);
+    }
+  }, [selectedLocation, envTimeline, selectedHorizon]);
+
+  // Update 3D spread visualization when forecast horizon tab changes
+  const handleSelectHorizon = useCallback((h: SpreadHorizon) => {
+    setSelectedHorizon(h);
+    if (spreadResult && spreadResult.timesteps[h]) {
+      const manager = CesiumViewerManager.getInstance();
+      const viewer = manager.getViewer();
+      if (viewer) {
+        SpreadLayerManager.getInstance().renderSpreadPrediction(viewer, spreadResult.timesteps[h]);
+      }
+    }
+  }, [spreadResult]);
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
@@ -202,6 +288,20 @@ export function App() {
             location={selectedLocation}
             onClear={handleClearLocation}
             onRunInference={handleRunInference}
+            isSimulatedFireActive={isSimulatedFireActive}
+            onCreateIgnition={handleCreateIgnition}
+            onRemoveFire={handleRemoveFire}
+            onRunSpreadAnalysis={handleRunSpreadAnalysis}
+          />
+        </div>
+
+        <div style={{ pointerEvents: 'auto' }}>
+          <FireSpreadPanel
+            simulationResult={spreadResult}
+            selectedHorizon={selectedHorizon}
+            onSelectHorizon={handleSelectHorizon}
+            onClose={() => handleRemoveFire()}
+            isLoading={isSpreadLoading}
           />
         </div>
 
