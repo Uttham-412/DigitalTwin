@@ -4,9 +4,14 @@ import { CesiumViewerManager } from '../../cesium/viewer';
 import { AmazonRegionControl } from './AmazonRegionControl';
 import { FireFocusControl } from './FireFocusControl';
 import { EMSR239FocusControl } from './EMSR239FocusControl';
+import { SelectedLocation } from '../../geospatial/coordinates';
 import * as Cesium from 'cesium';
 
-export const CameraControls: React.FC = () => {
+interface CameraControlsProps {
+  onSelectLocation?: (loc: SelectedLocation) => void;
+}
+
+export const CameraControls: React.FC<CameraControlsProps> = ({ onSelectLocation }) => {
   const manager = CesiumViewerManager.getInstance();
 
   const handleZoomIn = () => {
@@ -81,7 +86,7 @@ export const CameraControls: React.FC = () => {
       <button
         onClick={handleResetCamera}
         className="glass-button"
-        title="Reset View to Almadén de la Plata"
+        title="Reset View to Default Globe"
         style={{ width: '40px', height: '40px' }}
       >
         <Compass size={20} color="var(--accent-cyan)" />
@@ -98,9 +103,9 @@ export const CameraControls: React.FC = () => {
 
       <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
 
-      <AmazonRegionControl />
-      <FireFocusControl />
-      <EMSR239FocusControl />
+      <AmazonRegionControl onSelectLocation={onSelectLocation} />
+      <FireFocusControl onSelectLocation={onSelectLocation} />
+      <EMSR239FocusControl onSelectLocation={onSelectLocation} />
     </div>
   );
 };

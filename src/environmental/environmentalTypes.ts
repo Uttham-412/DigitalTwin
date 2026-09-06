@@ -6,6 +6,7 @@ export interface Coordinates {
 export enum EnvironmentalProvenance {
   OBSERVED = 'OBSERVED',
   FORECAST = 'FORECAST',
+  HISTORICAL = 'HISTORICAL',
   DERIVED = 'DERIVED'
 }
 

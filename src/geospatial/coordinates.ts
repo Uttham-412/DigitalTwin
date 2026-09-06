@@ -12,14 +12,23 @@ export interface BoundingBox {
   north: number;
 }
 
+export type LocationSource =
+  | 'GLOBE_CLICK'
+  | 'FIRMS_FIRE'
+  | 'AMAZON_REGION'
+  | 'EMSR239_EVENT'
+  | 'OTHER';
+
 export interface SelectedLocation {
   id: string;
   latitude: number;
   longitude: number;
-  height: number; // Elevation in meters above WGS84 ellipsoid / terrain
-  timestamp: string;
-  source: 'CESIUM_GLOBE_PICK';
-  classification: LayerDataType.OBSERVED;
+  height?: number; // Elevation in meters above WGS84 ellipsoid / terrain
+  timestamp: string; // ISO string when selected
+  eventDate?: string; // Optional historical/observed date (e.g. "2017-07-31" or "2024-08-23")
+  source: LocationSource;
+  label?: string; // Optional human readable location name (e.g. "Almadén de la Plata, Spain")
+  classification?: LayerDataType;
 }
 
 export interface EventGeospatialMetadata {

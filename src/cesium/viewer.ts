@@ -185,7 +185,7 @@ export class CesiumViewerManager {
           longitude: parseFloat(lng.toFixed(6)),
           height: parseFloat(height.toFixed(1)),
           timestamp: new Date().toISOString(),
-          source: 'CESIUM_GLOBE_PICK',
+          source: 'GLOBE_CLICK',
           classification: LayerDataType.OBSERVED,
         };
 

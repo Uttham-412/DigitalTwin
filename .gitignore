@@ -29,3 +29,7 @@ dist-ssr
 
 # Cesium build artifacts if any
 public/Cesium
+
+# Python cache files
+__pycache__/
+*.pyc

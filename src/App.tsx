@@ -9,6 +9,7 @@ import { FireObservationPanel } from './components/wildfire/FireObservationPanel
 import { EMSR239InfoPanel } from './components/ui/EMSR239InfoPanel';
 import { EnvironmentalPanel } from './components/ui/EnvironmentalPanel';
 import { EnvironmentalFocusControl } from './components/map/EnvironmentalFocusControl';
+import { UNetInferencePanel } from './components/ui/UNetInferencePanel';
 import { SelectedLocation } from './geospatial/coordinates';
 import { SelectionMarkerManager } from './cesium/selectionMarker';
 import { FireMarkerManager } from './cesium/fireMarker';
@@ -18,11 +19,14 @@ import { ImageryType, setImageryLayer } from './cesium/imagery';
 import { AMAZON_REAL_WILDFIRE_OBSERVATIONS } from './wildfire/fireObservation';
 import { environmentalService } from './environmental/environmentalService';
 import { EnvironmentalTimeline } from './environmental/environmentalTypes';
+import { unetInferenceService, UNetInferenceResponse } from './services/unetInferenceService';
 
 export function App() {
   const [coordinates, setCoordinates] = useState<string>('---, ---');
   const [altitude, setAltitude] = useState<string>('---');
   const [isTerrainLoaded, setIsTerrainLoaded] = useState<boolean>(false);
+
+  // Authoritative Global Selected Location State
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
   const [currentImagery, setCurrentImagery] = useState<ImageryType>(ImageryType.SATELLITE);
 
@@ -30,6 +34,10 @@ export function App() {
   const [envTimeline, setEnvTimeline] = useState<EnvironmentalTimeline | null>(null);
   const [isEnvPanelOpen, setIsEnvPanelOpen] = useState<boolean>(true);
   const [isEnvLoading, setIsEnvLoading] = useState<boolean>(false);
+
+  // U-Net Inference State
+  const [inferenceResult, setInferenceResult] = useState<UNetInferenceResponse | null>(null);
+  const [isInferenceLoading, setIsInferenceLoading] = useState<boolean>(false);
 
   const activeFireObservation = AMAZON_REAL_WILDFIRE_OBSERVATIONS[0];
 
@@ -42,32 +50,40 @@ export function App() {
     setIsTerrainLoaded(status);
   }, []);
 
-  // Fetch real-time weather when location is selected or initialized
-  const loadWeatherForCoords = useCallback(async (lat: number, lng: number, name?: string) => {
+  // Fetch real-time or historical weather when selected location changes
+  const loadWeatherForLocation = useCallback(async (loc: SelectedLocation) => {
     setIsEnvLoading(true);
+    setEnvTimeline(null); // Clear previous weather to avoid stale values
     const timeline = await environmentalService.fetchEnvironmentalTimeline(
-      { latitude: lat, longitude: lng },
-      name
+      { latitude: loc.latitude, longitude: loc.longitude },
+      loc.label,
+      loc.eventDate
     );
     setEnvTimeline(timeline);
     setIsEnvLoading(false);
   }, []);
 
-  // Initial Weather Load (Default to Amazon Rainforest target region)
+  // Initial Location & Weather Load (Amazon Rainforest)
   useEffect(() => {
-    loadWeatherForCoords(-3.3842, -60.1985, 'Amazon Rainforest (Manaus Corridor)');
-  }, [loadWeatherForCoords]);
+    const defaultLoc: SelectedLocation = {
+      id: 'default_amazon',
+      latitude: -3.3842,
+      longitude: -60.1985,
+      height: 12000,
+      source: 'AMAZON_REGION',
+      label: 'Amazon Rainforest (Manaus Corridor, Brazil)',
+      timestamp: new Date().toISOString()
+    };
+    setSelectedLocation(defaultLoc);
+    loadWeatherForLocation(defaultLoc);
+  }, [loadWeatherForLocation]);
 
-  // Update weather when user clicks on globe
+  // Update weather whenever authoritative selectedLocation state changes
   useEffect(() => {
     if (selectedLocation) {
-      loadWeatherForCoords(
-        selectedLocation.latitude,
-        selectedLocation.longitude,
-        `Selected Pin (${selectedLocation.latitude.toFixed(4)}°, ${selectedLocation.longitude.toFixed(4)}°)`
-      );
+      loadWeatherForLocation(selectedLocation);
     }
-  }, [selectedLocation, loadWeatherForCoords]);
+  }, [selectedLocation, loadWeatherForLocation]);
 
   // Update 3D selection pin marker in Cesium when location state changes
   useEffect(() => {
@@ -105,10 +121,12 @@ export function App() {
   // Handle globe click selection callback registration
   const handleSelectLocation = useCallback((location: SelectedLocation) => {
     setSelectedLocation(location);
+    setInferenceResult(null); // Reset inference result on new location click
   }, []);
 
   const handleClearLocation = useCallback(() => {
     setSelectedLocation(null);
+    setInferenceResult(null);
     const manager = CesiumViewerManager.getInstance();
     const viewer = manager.getViewer();
     if (viewer) {
@@ -129,6 +147,22 @@ export function App() {
     setEnvTimeline((prev) => (prev ? { ...prev, selectedIndex: index } : null));
   }, []);
 
+  // Trigger U-Net Inference on demand for selected location
+  const handleRunInference = useCallback(async () => {
+    if (!selectedLocation) return;
+    setIsInferenceLoading(true);
+    setInferenceResult(null);
+
+    const res = await unetInferenceService.runInference({
+      latitude: selectedLocation.latitude,
+      longitude: selectedLocation.longitude,
+      eventDate: selectedLocation.eventDate
+    });
+
+    setInferenceResult(res);
+    setIsInferenceLoading(false);
+  }, [selectedLocation]);
+
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
       {/* Top Header */}
@@ -139,16 +173,64 @@ export function App() {
         selectedLocation={selectedLocation}
       />
 
-      {/* Amazon Rainforest Information Panel */}
-      <AmazonInfoPanel />
+      {/* Main 3D Cesium Map Canvas */}
+      <CesiumViewerComponent
+        onCoordinatesUpdate={handleCoordinatesUpdate}
+        onTerrainLoaded={handleTerrainLoaded}
+        onSelectLocation={handleSelectLocation}
+      />
 
-      {/* EMSR239 U-Net AI Layer Information Panel */}
-      <EMSR239InfoPanel />
+      {/* Responsive Non-Overlapping Left Sidebar Dock (Collision-Aware) */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '80px',
+          left: '20px',
+          width: '380px',
+          maxWidth: 'calc(50vw - 40px)',
+          maxHeight: 'calc(100vh - 120px)',
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          zIndex: 35,
+          pointerEvents: 'none' // Allow map clicks through container gaps
+        }}
+      >
+        <div style={{ pointerEvents: 'auto' }}>
+          <LocationPanel
+            location={selectedLocation}
+            onClear={handleClearLocation}
+            onRunInference={handleRunInference}
+          />
+        </div>
 
-      {/* Real NASA FIRMS Wildfire Observation Panel */}
-      {activeFireObservation && (
-        <FireObservationPanel observation={activeFireObservation} />
-      )}
+        <div style={{ pointerEvents: 'auto' }}>
+          <UNetInferencePanel
+            response={inferenceResult}
+            isLoading={isInferenceLoading}
+            onClose={() => setInferenceResult(null)}
+          />
+        </div>
+
+        {selectedLocation?.source === 'AMAZON_REGION' && (
+          <div style={{ pointerEvents: 'auto' }}>
+            <AmazonInfoPanel />
+          </div>
+        )}
+
+        {selectedLocation?.source === 'EMSR239_EVENT' && (
+          <div style={{ pointerEvents: 'auto' }}>
+            <EMSR239InfoPanel />
+          </div>
+        )}
+
+        {selectedLocation?.source === 'FIRMS_FIRE' && activeFireObservation && (
+          <div style={{ pointerEvents: 'auto' }}>
+            <FireObservationPanel observation={activeFireObservation} />
+          </div>
+        )}
+      </div>
 
       {/* Time-Aware Environmental Intelligence Panel */}
       <EnvironmentalPanel
@@ -159,15 +241,8 @@ export function App() {
         isLoading={isEnvLoading}
       />
 
-      {/* Main 3D Cesium Map Canvas */}
-      <CesiumViewerComponent
-        onCoordinatesUpdate={handleCoordinatesUpdate}
-        onTerrainLoaded={handleTerrainLoaded}
-        onSelectLocation={handleSelectLocation}
-      />
-
       {/* Floating Navigation Controls */}
-      <CameraControls />
+      <CameraControls onSelectLocation={handleSelectLocation} />
 
       {/* Quick Action Button to Toggle Environmental Intelligence Panel */}
       <div style={{ position: 'absolute', bottom: '24px', left: '20px', zIndex: 20 }}>
@@ -181,12 +256,6 @@ export function App() {
       <ImageryToggle
         currentType={currentImagery}
         onSelectType={handleSelectImagery}
-      />
-
-      {/* Slide-in Selected Location Telemetry Panel */}
-      <LocationPanel
-        location={selectedLocation}
-        onClear={handleClearLocation}
       />
     </div>
   );

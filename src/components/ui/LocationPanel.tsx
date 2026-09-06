@@ -6,9 +6,10 @@ import { CesiumViewerManager } from '../../cesium/viewer';
 interface LocationPanelProps {
   location: SelectedLocation | null;
   onClear: () => void;
+  onRunInference?: () => void;
 }
 
-export const LocationPanel: React.FC<LocationPanelProps> = ({ location, onClear }) => {
+export const LocationPanel: React.FC<LocationPanelProps> = ({ location, onClear, onRunInference }) => {
   if (!location) return null;
 
   const handleFlyTo = () => {
@@ -16,7 +17,8 @@ export const LocationPanel: React.FC<LocationPanelProps> = ({ location, onClear 
     manager.flyToLocation(location.latitude, location.longitude, location.height);
   };
 
-  const elevationFeet = (location.height * 3.28084).toFixed(0);
+  const heightVal = location.height ?? 0;
+  const elevationFeet = (heightVal * 3.28084).toFixed(0);
 
   return (
     <div
@@ -160,7 +162,7 @@ export const LocationPanel: React.FC<LocationPanelProps> = ({ location, onClear 
               color: 'var(--text-primary)',
             }}
           >
-            {location.height.toLocaleString()} m{' '}
+            {heightVal.toLocaleString()} m{' '}
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>
               ({elevationFeet} ft)
             </span>
@@ -206,24 +208,26 @@ export const LocationPanel: React.FC<LocationPanelProps> = ({ location, onClear 
           Center Camera
         </button>
 
-        <button
-          disabled
-          className="glass-button"
-          style={{
-            flex: 1.4,
-            padding: '8px 12px',
-            fontSize: '0.78rem',
-            fontWeight: 500,
-            gap: '6px',
-            opacity: 0.6,
-            cursor: 'not-allowed',
-            borderColor: 'rgba(255,255,255,0.08)',
-          }}
-          title="Satellite & U-Net AI Inference Integration Pipeline (Phase 6)"
-        >
-          <ExternalLink size={14} />
-          Target for AI Pipeline
-        </button>
+        {onRunInference && (
+          <button
+            onClick={onRunInference}
+            className="glass-button"
+            style={{
+              flex: 1.4,
+              padding: '8px 12px',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              gap: '6px',
+              color: '#EF4444',
+              borderColor: 'rgba(239, 68, 68, 0.4)',
+              background: 'rgba(239, 68, 68, 0.1)'
+            }}
+            title="Run U-Net AI Burned-Area Segmentation Inference"
+          >
+            <ExternalLink size={14} color="#EF4444" />
+            Analyze with U-Net AI
+          </button>
+        )}
       </div>
     </div>
   );
