@@ -16,6 +16,7 @@ import { SelectionMarkerManager } from './cesium/selectionMarker';
 import { FireMarkerManager } from './cesium/fireMarker';
 import { WildfireLayerManager } from './cesium/wildfireLayer';
 import { SpreadLayerManager } from './cesium/spreadLayer';
+import { StudyRegionLayerManager } from './cesium/studyRegionLayer';
 import { CesiumViewerManager } from './cesium/viewer';
 import { ImageryType, setImageryLayer } from './cesium/imagery';
 import { AMAZON_REAL_WILDFIRE_OBSERVATIONS } from './wildfire/fireObservation';
@@ -110,7 +111,7 @@ export function App() {
     }
   }, [selectedLocation]);
 
-  // Render real active fire observation marker & EMSR239 U-Net AI GeoJSON layers in Cesium
+  // Render real active fire observation marker, EMSR239 U-Net AI GeoJSON layers, and Amazon Study Region boundary in Cesium
   useEffect(() => {
     const timer = setTimeout(() => {
       const manager = CesiumViewerManager.getInstance();
@@ -118,6 +119,7 @@ export function App() {
       if (viewer) {
         FireMarkerManager.getInstance().renderFireObservations(viewer, AMAZON_REAL_WILDFIRE_OBSERVATIONS);
         WildfireLayerManager.getInstance().loadEMSR239Layers(viewer);
+        StudyRegionLayerManager.getInstance().renderStudyRegionBoundary(viewer);
       }
     }, 1200);
 

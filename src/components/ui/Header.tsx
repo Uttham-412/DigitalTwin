@@ -65,7 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
               gap: '8px',
             }}
           >
-            LAND8FIRE
+            LAND8FIRE — AMAZON RAINFOREST DIGITAL TWIN
             <span
               style={{
                 fontSize: '0.65rem',
@@ -79,11 +79,11 @@ export const Header: React.FC<HeaderProps> = ({
                 textTransform: 'uppercase',
               }}
             >
-              Amazon Digital Twin
+              Study Region Active
             </span>
           </h1>
           <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-            Real-World Geospatial Intelligence Platform — Manaus Reserve, Brazil
+            Real-World Geospatial Intelligence for Wildfire Detection & Prediction
           </p>
         </div>
       </div>
