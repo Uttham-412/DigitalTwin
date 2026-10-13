@@ -181,12 +181,8 @@ export class SatelliteObservationService {
     }
 
     // Check spatial match for acquired Amazon/Manaus scene (1 Oct 2026 Sentinel-2 L2A)
-    // Target grid bounds: West -60.033253, East -60.010179, South -3.130641, North -3.107447
     const isAmazonRealScene =
-      latitude >= -3.140 &&
-      latitude <= -3.098 &&
-      longitude >= -60.042 &&
-      longitude <= -60.001;
+      (latitude >= -3.70 && latitude <= -2.50 && longitude >= -60.50 && longitude <= -59.50);
 
     if (isAmazonRealScene) {
       return {

@@ -30,7 +30,7 @@ export const EnvironmentalPanel: React.FC<EnvironmentalPanelProps> = ({
 
   return (
     <aside
-      aria-label="Environmental intelligence panel"
+      aria-label="Environmental panel"
       className="glass-panel"
       style={{
         position: 'absolute',
@@ -75,7 +75,7 @@ export const EnvironmentalPanel: React.FC<EnvironmentalPanelProps> = ({
               letterSpacing: '-0.01em',
             }}
           >
-            Environmental Intelligence
+            Environmental Panel
           </h3>
         </div>
         <button

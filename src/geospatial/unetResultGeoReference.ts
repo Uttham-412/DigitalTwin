@@ -116,12 +116,9 @@ export class UNetResultGeoReferenceService {
       Math.abs(segResult.longitude - (-6.0049)) < 0.2;
 
     // Check spatial match for Amazon study region scene (1 Oct 2026 Sentinel-2 acquisition)
-    // Target grid bounds: West -60.033253, East -60.010179, South -3.130641, North -3.107447
     const isAmazonScene =
-      segResult.latitude >= -3.140 &&
-      segResult.latitude <= -3.098 &&
-      segResult.longitude >= -60.042 &&
-      segResult.longitude <= -60.001;
+      (segResult.latitude >= -3.70 && segResult.latitude <= -2.50 && segResult.longitude >= -60.50 && segResult.longitude <= -59.50) ||
+      Boolean((segResult as any).sceneId?.includes('S2B_MSIL2A_20261001'));
 
     let geoJsonUrl: string | undefined = segResult.geoJsonUrl;
     let sceneId: string | undefined = undefined;

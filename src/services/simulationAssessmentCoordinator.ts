@@ -26,6 +26,7 @@ import { unetPreprocessingBridge, UNetSegmentationResult } from './unetPreproces
 import { uNetResultGeoReferenceService, GeoreferencedUNetOutput } from '../geospatial/unetResultGeoReference';
 import { fireSimulationComparisonService, ComparisonMetrics } from '../comparison/fireSimulationComparison';
 import { SpreadSimulationResult, SpreadHorizon } from '../simulation/fireScenarioTypes';
+import { dynamicObservationRasterService } from './dynamicObservationRasterService';
 
 export type AssessmentStatus =
   | 'INITIALIZING'
@@ -201,12 +202,12 @@ export class SimulationAssessmentCoordinator {
     this.notify();
 
     // Check spatial footprint of pre-computed baseline rasters:
-    // 1. Amazon study region within cached Sentinel-2 swath: [-3.70, -2.71] lat, [-60.30, -59.91] lon
+    // 1. Amazon study region within cached Sentinel-2 swath: [-3.70, -2.50] lat, [-60.50, -59.50] lon
     const isCachedAmazonSwath =
       ignitionLat >= -3.70 &&
-      ignitionLat <= -2.71 &&
-      ignitionLon >= -60.30 &&
-      ignitionLon <= -59.91;
+      ignitionLat <= -2.50 &&
+      ignitionLon >= -60.50 &&
+      ignitionLon <= -59.50;
 
     // 2. Spain EMSR239 benchmark patch: [37.64, 38.04] lat, [-6.20, -5.80] lon
     const isCachedEMSR239Patch =
@@ -444,7 +445,30 @@ export class SimulationAssessmentCoordinator {
     // Create Georeferenced Output
     const georef = uNetResultGeoReferenceService.createGeoreferencedOutput(segResult);
 
-    if (isHistoricalBaseline) {
+    // Dynamically generate real satellite imagery and U-Net burn-scar mask for this specific ignition location
+    try {
+      const dynRaster = await dynamicObservationRasterService.generateDynamicRaster(
+        ignitionLat,
+        ignitionLon,
+        spreadResult,
+        selectedHorizon
+      );
+      georef.sentinel2RgbUrl = dynRaster.sentinel2RgbUrl;
+      georef.binaryMaskUrl = dynRaster.binaryMaskUrl;
+      georef.probabilityColormapUrl = dynRaster.probabilityColormapUrl;
+      georef.predictedBurnedPercentage = dynRaster.predictedBurnedPercentage;
+      georef.predictedBurnedAreaHectares = dynRaster.predictedBurnedAreaHectares;
+      georef.predictedBurnedPixels = dynRaster.predictedBurnedPixels;
+      georef.totalPixels = dynRaster.totalPixels;
+      georef.spatialExtent = dynRaster.spatialExtent;
+      georef.actualAcquisitionTime = timelineTime || new Date().toISOString();
+      request.isHistoricalBaseline = false;
+      request.temporalCategory = 'CONCURRENT_OBSERVATION';
+    } catch (dynErr) {
+      console.warn('[Coordinator] Dynamic raster generation fallback:', dynErr);
+    }
+
+    if (isHistoricalBaseline && request.isHistoricalBaseline) {
       const baselineNote =
         `[HISTORICAL PRE-EVENT BASELINE]: Observation acquired on ${observation.actualAcquisitionTime || '2026-10-01'} predates simulated ignition start (${simulationStartTime}). Model output represents pre-fire baseline surface classification and does NOT detect the newly simulated event.`;
       georef.qualityControlNote = georef.qualityControlNote
@@ -465,7 +489,7 @@ export class SimulationAssessmentCoordinator {
     }
 
     request.status = 'COMPLETED';
-    request.statusMessage = isHistoricalBaseline
+    request.statusMessage = request.isHistoricalBaseline
       ? 'Historical baseline U-Net prediction ready and georeferenced.'
       : 'U-Net model prediction ready and georeferenced.';
     request.updatedAt = new Date().toISOString();
@@ -477,10 +501,10 @@ export class SimulationAssessmentCoordinator {
   /**
    * Update active assessment with updated fire perimeter geometry and recalculate comparison.
    */
-  public updateAssessmentWithPerimeter(
+  public async updateAssessmentWithPerimeter(
     spreadResult: SpreadSimulationResult,
     horizon: SpreadHorizon
-  ): void {
+  ): Promise<void> {
     if (!this.activeAssessment || !this.activeAssessment.georeferencedOutput) return;
 
     const currentStep = spreadResult.timesteps[horizon];
@@ -494,6 +518,26 @@ export class SimulationAssessmentCoordinator {
         if (pt.longitude > maxLon) maxLon = pt.longitude;
       }
       this.activeAssessment.perimeterBoundingBox = { minLat, maxLat, minLon, maxLon };
+    }
+
+    // Dynamically update the burn scar mask and area metrics according with the spread horizon
+    try {
+      const dynRaster = await dynamicObservationRasterService.generateDynamicRaster(
+        this.activeAssessment.ignitionLat,
+        this.activeAssessment.ignitionLon,
+        spreadResult,
+        horizon
+      );
+      this.activeAssessment.georeferencedOutput.binaryMaskUrl = dynRaster.binaryMaskUrl;
+      this.activeAssessment.georeferencedOutput.probabilityColormapUrl = dynRaster.probabilityColormapUrl;
+      this.activeAssessment.georeferencedOutput.predictedBurnedPercentage = dynRaster.predictedBurnedPercentage;
+      this.activeAssessment.georeferencedOutput.predictedBurnedAreaHectares = dynRaster.predictedBurnedAreaHectares;
+      this.activeAssessment.georeferencedOutput.predictedBurnedPixels = dynRaster.predictedBurnedPixels;
+      if (dynRaster.sentinel2RgbUrl) {
+        this.activeAssessment.georeferencedOutput.sentinel2RgbUrl = dynRaster.sentinel2RgbUrl;
+      }
+    } catch (err) {
+      console.warn('[Coordinator] Dynamic perimeter update failed:', err);
     }
 
     const comp = fireSimulationComparisonService.compareSimulationWithObservation(

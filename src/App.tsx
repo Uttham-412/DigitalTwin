@@ -128,6 +128,7 @@ export function App() {
   const [comparisonMetrics, setComparisonMetrics] = useState<ComparisonMetrics | null>(null);
   const [ignitionRejectionMessage, setIgnitionRejectionMessage] = useState<string | null>(null);
   const weatherReqSeqRef = useRef<number>(0);
+  const isSyncingHorizonRef = useRef<boolean>(false);
 
   const activeFireObservation = AMAZON_REAL_WILDFIRE_OBSERVATIONS[0];
 
@@ -264,16 +265,43 @@ export function App() {
   }, []);
 
   const handleSelectEnvIndex = useCallback((index: number) => {
+    isSyncingHorizonRef.current = false;
     setEnvTimeline((prev) => {
       if (!prev) return null;
       const updated = { ...prev, selectedIndex: index };
       const selectedObs = updated.observations[index];
       if (selectedObs) {
         simulationClockManager.setAuthoritativeTime(selectedObs.timestamp);
+
+        // Bi-directional synchronization: Map selected environmental observation time to closest SpreadHorizon
+        if (isSimulatedFireActive && spreadResult) {
+          const ignitionTime = spreadResult.initialFireState?.timestamp || updated.observations[0]?.timestamp;
+          const diffHours = (new Date(selectedObs.timestamp).getTime() - new Date(ignitionTime).getTime()) / (3600 * 1000);
+
+          let targetHorizon: SpreadHorizon = '+1H';
+          if (diffHours <= 0.5) targetHorizon = '+0H';
+          else if (diffHours <= 1.5) targetHorizon = '+1H';
+          else if (diffHours <= 4.0) targetHorizon = '+2H';
+          else if (diffHours <= 9.0) targetHorizon = '+6H';
+          else if (diffHours <= 18.0) targetHorizon = '+12H';
+          else targetHorizon = '+24H';
+
+          setSelectedHorizon(targetHorizon);
+          simulationClockManager.setHorizon(targetHorizon);
+
+          if (spreadResult.timesteps[targetHorizon]) {
+            const manager = CesiumViewerManager.getInstance();
+            const viewer = manager.getViewer();
+            if (viewer) {
+              SpreadLayerManager.getInstance().renderSpreadPrediction(viewer, spreadResult.timesteps[targetHorizon]);
+            }
+            simulationAssessmentCoordinator.updateAssessmentWithPerimeter(spreadResult, targetHorizon);
+          }
+        }
       }
       return updated;
     });
-  }, []);
+  }, [isSimulatedFireActive, spreadResult]);
 
   // Execute Phase 2A -> Phase 2B -> Phase 2C Satellite U-Net Pipeline via Assessment Coordinator
   const handleRunInference = useCallback(async () => {
@@ -304,72 +332,6 @@ export function App() {
       setIsInferenceLoading(false);
     }
   }, [selectedLocation, envTimeline, isSimulatedFireActive, selectedHorizon, spreadResult]);
-
-  // Scenario Lifecycle: Create Ignition with surface burnability & water validation
-  const handleCreateIgnition = useCallback(async () => {
-    if (!selectedLocation) return;
-    setIgnitionRejectionMessage(null);
-
-    const fuel = await fuelService.fetchFuelData({
-      latitude: selectedLocation.latitude,
-      longitude: selectedLocation.longitude
-    });
-
-    const validation = fuelService.validateIgnition(
-      { latitude: selectedLocation.latitude, longitude: selectedLocation.longitude },
-      fuel
-    );
-
-    if (!validation.valid) {
-      setIgnitionRejectionMessage(validation.message);
-      setIsSimulatedFireActive(false);
-      setSpreadResult(null);
-      const manager = CesiumViewerManager.getInstance();
-      const viewer = manager.getViewer();
-      if (viewer) {
-        SpreadLayerManager.getInstance().clearSpread(viewer);
-      }
-      return;
-    }
-
-    setIgnitionRejectionMessage(null);
-    setIsSimulatedFireActive(true);
-    setSpreadResult(null);
-
-    const authTimestamp = (envTimeline && envTimeline.observations[envTimeline.selectedIndex])
-      ? envTimeline.observations[envTimeline.selectedIndex].timestamp
-      : (selectedLocation.timestamp || new Date().toISOString());
-
-    simulationClockManager.initializeClock(authTimestamp);
-
-    // Phase 3E: Automatically initiate coordinated U-Net assessment workflow for newly started simulation
-    const simId = `sim_${Date.now()}`;
-    simulationAssessmentCoordinator.startAssessmentForSimulation({
-      simulationId: simId,
-      ignitionLat: selectedLocation.latitude,
-      ignitionLon: selectedLocation.longitude,
-      simulationStartTime: authTimestamp,
-      timelineTime: authTimestamp,
-      selectedHorizon: selectedHorizon
-    });
-  }, [selectedLocation, envTimeline, selectedHorizon]);
-
-  // Scenario Lifecycle: Remove Fire / Clear Scenario
-  const handleRemoveFire = useCallback(() => {
-    setIsSimulatedFireActive(false);
-    setSpreadResult(null);
-    setComparisonMetrics(null);
-    setIgnitionRejectionMessage(null);
-    setIsDetectionPanelOpen(false);
-    simulationClockManager.stopPlayback();
-    simulationAssessmentCoordinator.cancelActiveAssessment();
-    const manager = CesiumViewerManager.getInstance();
-    const viewer = manager.getViewer();
-    if (viewer) {
-      SpreadLayerManager.getInstance().clearSpread(viewer);
-      uNetPredictionLayerManager.clearLayers(viewer);
-    }
-  }, []);
 
   // Core fire-spread calculation function
   const executeSpreadSimulation = useCallback(async (
@@ -450,6 +412,80 @@ export function App() {
     return res;
   }, [georefOutput]);
 
+  // Scenario Lifecycle: Create Ignition with surface burnability & water validation
+  const handleCreateIgnition = useCallback(async () => {
+    if (!selectedLocation) return;
+    setIgnitionRejectionMessage(null);
+
+    const fuel = await fuelService.fetchFuelData({
+      latitude: selectedLocation.latitude,
+      longitude: selectedLocation.longitude
+    });
+
+    const validation = fuelService.validateIgnition(
+      { latitude: selectedLocation.latitude, longitude: selectedLocation.longitude },
+      fuel
+    );
+
+    if (!validation.valid) {
+      setIgnitionRejectionMessage(validation.message);
+      setIsSimulatedFireActive(false);
+      setSpreadResult(null);
+      const manager = CesiumViewerManager.getInstance();
+      const viewer = manager.getViewer();
+      if (viewer) {
+        SpreadLayerManager.getInstance().clearSpread(viewer);
+      }
+      return;
+    }
+
+    setIgnitionRejectionMessage(null);
+    setIsSimulatedFireActive(true);
+    setSpreadResult(null);
+
+    const authTimestamp = (envTimeline && envTimeline.observations[envTimeline.selectedIndex])
+      ? envTimeline.observations[envTimeline.selectedIndex].timestamp
+      : (selectedLocation.timestamp || new Date().toISOString());
+
+    simulationClockManager.initializeClock(authTimestamp);
+
+    // Phase 3E: Automatically initiate coordinated U-Net assessment workflow for newly started simulation
+    const simId = `sim_${Date.now()}`;
+    await simulationAssessmentCoordinator.startAssessmentForSimulation({
+      simulationId: simId,
+      ignitionLat: selectedLocation.latitude,
+      ignitionLon: selectedLocation.longitude,
+      simulationStartTime: authTimestamp,
+      timelineTime: authTimestamp,
+      selectedHorizon: selectedHorizon
+    });
+
+    // Execute spread simulation for selected horizon immediately so 3D map & assessment rasters synchronize
+    if (envTimeline) {
+      const simRes = await executeSpreadSimulation(envTimeline, selectedLocation, selectedHorizon);
+      if (simRes) {
+        await simulationAssessmentCoordinator.updateAssessmentWithPerimeter(simRes, selectedHorizon);
+      }
+    }
+  }, [selectedLocation, envTimeline, selectedHorizon, executeSpreadSimulation]);
+
+  // Scenario Lifecycle: Remove Fire / Clear Scenario
+  const handleRemoveFire = useCallback(() => {
+    setIsSimulatedFireActive(false);
+    setSpreadResult(null);
+    setComparisonMetrics(null);
+    setIgnitionRejectionMessage(null);
+    setIsDetectionPanelOpen(false);
+    simulationClockManager.stopPlayback();
+    simulationAssessmentCoordinator.cancelActiveAssessment();
+    const manager = CesiumViewerManager.getInstance();
+    const viewer = manager.getViewer();
+    if (viewer) {
+      SpreadLayerManager.getInstance().clearSpread(viewer);
+      uNetPredictionLayerManager.clearLayers(viewer);
+    }
+  }, []);
+
   // Scenario Lifecycle: Run Fire Spread Analysis
   const handleRunSpreadAnalysis = useCallback(async () => {
     if (!selectedLocation || !envTimeline) return;
@@ -458,13 +494,17 @@ export function App() {
 
   // Recompute spread dynamically when user scrubs timeline slider during an active simulation
   useEffect(() => {
+    if (isSyncingHorizonRef.current) {
+      isSyncingHorizonRef.current = false;
+      return;
+    }
     if (isSimulatedFireActive && spreadResult && selectedLocation && envTimeline) {
       executeSpreadSimulation(envTimeline, selectedLocation, selectedHorizon);
     }
   }, [envTimeline?.selectedIndex]);
 
-  // Update 3D spread visualization and synchronize timeline when forecast horizon tab changes
-  const handleSelectHorizon = useCallback((h: SpreadHorizon) => {
+  // Update 3D spread visualization, dynamic satellite/mask rasters, and synchronize timeline when forecast horizon tab changes
+  const handleSelectHorizon = useCallback(async (h: SpreadHorizon) => {
     setSelectedHorizon(h);
     simulationClockManager.setHorizon(h);
 
@@ -494,6 +534,7 @@ export function App() {
         }
       });
 
+      isSyncingHorizonRef.current = true;
       setEnvTimeline((prev) => (prev ? { ...prev, selectedIndex: closestIdx } : null));
     }
 
@@ -503,6 +544,8 @@ export function App() {
       if (viewer) {
         SpreadLayerManager.getInstance().renderSpreadPrediction(viewer, spreadResult.timesteps[h]);
       }
+      // Update active assessment with simulated fire perimeter
+      simulationAssessmentCoordinator.updateAssessmentWithPerimeter(spreadResult, h);
     }
 
     if (spreadResult && georefOutput) {
@@ -514,6 +557,16 @@ export function App() {
       setComparisonMetrics(comp);
     }
   }, [spreadResult, georefOutput, envTimeline]);
+
+  // Synchronize clock manager automated playback with horizon selection and fire assessment rasters
+  useEffect(() => {
+    const unsubscribe = simulationClockManager.subscribe((clockState) => {
+      if (clockState.isPlaying && clockState.activeHorizon !== selectedHorizon) {
+        handleSelectHorizon(clockState.activeHorizon);
+      }
+    });
+    return unsubscribe;
+  }, [selectedHorizon, handleSelectHorizon]);
 
   // Handle Layer Visibility Toggles
   const handleTogglePredictionLayer = useCallback(() => {
@@ -684,6 +737,7 @@ export function App() {
         currentIgnitionLat={selectedLocation?.latitude}
         currentIgnitionLon={selectedLocation?.longitude}
         isSimulatedFireActive={isSimulatedFireActive}
+        selectedHorizon={selectedHorizon}
         showPredictionOnMap={showPredictionLayer}
         onTogglePredictionOnMap={handleTogglePredictionLayer}
         visualizationMode={visualizationMode}

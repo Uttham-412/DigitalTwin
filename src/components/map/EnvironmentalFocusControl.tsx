@@ -30,7 +30,7 @@ export const EnvironmentalFocusControl: React.FC<EnvironmentalFocusControlProps>
         boxShadow: 'var(--shadow-card)',
         transition: 'all 0.15s ease-in-out'
       }}
-      title="Toggle Time-Aware Environmental Intelligence Panel"
+      title="Toggle Environmental Panel"
     >
       <svg
         width="16"

@@ -14,6 +14,7 @@ import {
 import { SimulationAssessmentRequest } from '../../services/simulationAssessmentCoordinator';
 import { GeoreferencedUNetOutput } from '../../geospatial/unetResultGeoReference';
 import { UNetVisualizationMode } from '../../cesium/unetPredictionLayer';
+import { SpreadHorizon } from '../../simulation/fireScenarioTypes';
 
 export interface UNetDetectionPanelProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export interface UNetDetectionPanelProps {
   currentIgnitionLat?: number;
   currentIgnitionLon?: number;
   isSimulatedFireActive?: boolean;
+  selectedHorizon?: SpreadHorizon;
   showPredictionOnMap: boolean;
   onTogglePredictionOnMap: () => void;
   visualizationMode: UNetVisualizationMode;
@@ -40,6 +42,8 @@ export const UNetDetectionPanel: React.FC<UNetDetectionPanelProps> = ({
   georefOutput,
   currentIgnitionLat,
   currentIgnitionLon,
+  isSimulatedFireActive,
+  selectedHorizon,
   showPredictionOnMap,
   onTogglePredictionOnMap,
   visualizationMode,
@@ -88,8 +92,9 @@ export const UNetDetectionPanel: React.FC<UNetDetectionPanelProps> = ({
   const isFailed = !isLocationMismatch && status === 'FAILED';
 
   const isHistorical =
-    assessmentRequest?.isHistoricalBaseline ||
-    assessmentRequest?.temporalCategory === 'HISTORICAL_BASELINE';
+    !isSimulatedFireActive &&
+    (assessmentRequest?.isHistoricalBaseline ||
+      assessmentRequest?.temporalCategory === 'HISTORICAL_BASELINE');
 
   const rgbUrl = georefOutput?.sentinel2RgbUrl || '/data/amazon_sentinel2_rgb.png';
   const binaryMaskUrl = georefOutput?.binaryMaskUrl || '/data/amazon_unet_binary_mask.png';
@@ -116,6 +121,9 @@ export const UNetDetectionPanel: React.FC<UNetDetectionPanelProps> = ({
   const burnedAreaHa =
     georefOutput?.predictedBurnedAreaHectares ??
     (burnedPixels > 0 ? (burnedPixels * 0.01).toFixed(2) : '0.00');
+
+  const displayLat = currentIgnitionLat ?? assessmentRequest?.ignitionLat ?? -3.119;
+  const displayLon = currentIgnitionLon ?? assessmentRequest?.ignitionLon ?? -60.021;
 
   const getStatusBadge = () => {
     if (isLocationMismatch) {
@@ -546,7 +554,7 @@ export const UNetDetectionPanel: React.FC<UNetDetectionPanelProps> = ({
                       />
                     </div>
                     <div style={{ padding: '4px 8px', fontSize: '0.62rem', color: 'var(--text-secondary)' }}>
-                      Sentinel-2 True Color (10m)
+                      Sentinel-2 True Color (10m) • ({displayLat.toFixed(3)}°, {displayLon.toFixed(3)}°)
                     </div>
                   </div>
 
@@ -569,10 +577,13 @@ export const UNetDetectionPanel: React.FC<UNetDetectionPanelProps> = ({
                         background: 'var(--bg-surface)',
                         display: 'flex',
                         justifyContent: 'space-between',
+                        alignItems: 'center',
                       }}
                     >
                       <span>Predicted mask</span>
-                      <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>τ = 0.65</span>
+                      <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>
+                        τ = 0.65{selectedHorizon ? ` (${selectedHorizon})` : ''}
+                      </span>
                     </div>
                     <div style={{ height: '150px', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <img
@@ -581,8 +592,19 @@ export const UNetDetectionPanel: React.FC<UNetDetectionPanelProps> = ({
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                     </div>
-                    <div style={{ padding: '4px 8px', fontSize: '0.62rem', color: 'var(--status-error)', fontWeight: 600 }}>
-                      {burnedPercentage}% burn scar
+                    <div
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '0.62rem',
+                        color: 'var(--status-error)',
+                        fontWeight: 600,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <span>{burnedPercentage}% burn scar</span>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{burnedAreaHa} ha</span>
                     </div>
                   </div>
                 </div>
