@@ -19,6 +19,17 @@ export const CesiumViewerComponent: React.FC<CesiumViewerProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
+  // Store callbacks in refs to decouple them from component re-renders
+  const onCoordsRef = useRef(onCoordinatesUpdate);
+  const onTerrainLoadedRef = useRef(onTerrainLoaded);
+  const onSelectLocationRef = useRef(onSelectLocation);
+
+  useEffect(() => {
+    onCoordsRef.current = onCoordinatesUpdate;
+    onTerrainLoadedRef.current = onTerrainLoaded;
+    onSelectLocationRef.current = onSelectLocation;
+  });
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -29,18 +40,22 @@ export const CesiumViewerComponent: React.FC<CesiumViewerProps> = ({
 
     // Initialize 3D terrain asynchronously
     enableWorldTerrain(viewer).then((loaded) => {
-      if (onTerrainLoaded) onTerrainLoaded(loaded);
+      if (onTerrainLoadedRef.current) onTerrainLoadedRef.current(loaded);
+    }).catch((err) => {
+      console.warn('[CesiumViewer] Terrain provider notice:', err);
     });
 
     // Register globe click listener for real-world location selection
-    if (onSelectLocation) {
-      manager.registerClickListener(onSelectLocation);
-    }
+    manager.registerClickListener((loc) => {
+      if (onSelectLocationRef.current) {
+        onSelectLocationRef.current(loc);
+      }
+    });
 
     // Handle cursor movement for real-time lat/lng & elevation readout
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((movement: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
-      if (!onCoordinatesUpdate) return;
+      if (!onCoordsRef.current) return;
 
       const cartesian = viewer.camera.pickEllipsoid(
         movement.endPosition,
@@ -56,15 +71,18 @@ export const CesiumViewerComponent: React.FC<CesiumViewerProps> = ({
         const formattedCoords = formatCoordinates(lat, lng);
         const formattedAlt = alt > 1000 ? `${(alt / 1000).toFixed(1)} km` : `${alt.toFixed(0)} m`;
 
-        onCoordinatesUpdate(formattedCoords, formattedAlt);
+        onCoordsRef.current(formattedCoords, formattedAlt);
       }
     }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
+    // Initial resize to ensure correct canvas geometry
+    viewer.resize();
+
     return () => {
       handler.destroy();
-      manager.destroy();
+      // DO NOT destroy manager here; preserving the viewer instance prevents WebGL context loss and black screens!
     };
-  }, [onCoordinatesUpdate, onTerrainLoaded]);
+  }, []); // Run ONCE on mount!
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

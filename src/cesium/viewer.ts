@@ -35,6 +35,11 @@ export class CesiumViewerManager {
       );
     }
 
+    // Clear previous DOM contents if any to ensure clean container initialization
+    if (container.firstChild) {
+      container.innerHTML = '';
+    }
+
     // Initialize Cesium Viewer with clean, uncluttered custom UI settings
     this.viewer = new Cesium.Viewer(container, {
       animation: false,
@@ -45,20 +50,21 @@ export class CesiumViewerManager {
       baseLayerPicker: false,
       navigationHelpButton: false,
       fullscreenButton: false,
-      infoBox: true,
-      selectionIndicator: false, // We use custom 3D SelectionMarkerManager
-      requestRenderMode: true, // Optimizes performance by rendering on demand
-      maximumRenderTimeChange: Infinity,
+      infoBox: false,
+      selectionIndicator: false,
+      requestRenderMode: false, // Guarantees continuous rendering so the canvas never freezes black
     });
 
     // Configure atmospheric & lighting visual quality
     const scene = this.viewer.scene;
-    scene.globe.enableLighting = true;
-    scene.globe.depthTestAgainstTerrain = true;
+    // CRITICAL: Set enableLighting to false to prevent the satellite imagery globe
+    // from turning pitch black during UTC night hours!
+    scene.globe.enableLighting = false;
+    scene.globe.depthTestAgainstTerrain = false;
     scene.globe.showGroundAtmosphere = true;
 
     // Enable high-DPI scaling for sharp rendering on retina screens
-    this.viewer.resolutionScale = window.devicePixelRatio || 1.0;
+    this.viewer.resolutionScale = Math.min(window.devicePixelRatio || 1.0, 2.0);
 
     // Set initial camera view directly to local Amazon forest study area (Manaus & Anavilhanas Reserve)
     this.resetCameraToDefault();
@@ -145,6 +151,39 @@ export class CesiumViewerManager {
       orientation: {
         heading: Cesium.Math.toRadians(0),
         pitch: Cesium.Math.toRadians(-50),
+        roll: 0,
+      },
+      duration: 2.0,
+    });
+  }
+
+  public flyToCanopyLevel(
+    latitude: number = AMAZON_RAINFOREST_REGION.latitude,
+    longitude: number = AMAZON_RAINFOREST_REGION.longitude
+  ): void {
+    if (!this.viewer || this.viewer.isDestroyed()) return;
+
+    // Cinematic low-altitude camera position looking across 3D emergent & canopy tree crowns
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(longitude, latitude - 0.004, 240),
+      orientation: {
+        heading: Cesium.Math.toRadians(0),
+        pitch: Cesium.Math.toRadians(-22),
+        roll: 0,
+      },
+      duration: 2.2,
+    });
+  }
+
+  public flyToFireFront(latitude: number, longitude: number): void {
+    if (!this.viewer || this.viewer.isDestroyed()) return;
+
+    // Cinematic focus on active advancing 3D flame front and billowing smoke
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(longitude, latitude - 0.008, 650),
+      orientation: {
+        heading: Cesium.Math.toRadians(0),
+        pitch: Cesium.Math.toRadians(-32),
         roll: 0,
       },
       duration: 2.0,

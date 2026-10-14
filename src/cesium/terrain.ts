@@ -14,8 +14,14 @@ export async function enableWorldTerrain(viewer: Cesium.Viewer): Promise<boolean
       requestVertexNormals: true,
     });
 
+    if (!viewer || viewer.isDestroyed()) {
+      return false;
+    }
+
     viewer.terrainProvider = terrainProvider;
-    viewer.scene.requestRender();
+    if (viewer.scene && !viewer.isDestroyed()) {
+      viewer.scene.requestRender();
+    }
     console.log('[Land8Fire] Real-world 3D Terrain loaded successfully.');
     return true;
   } catch (error) {

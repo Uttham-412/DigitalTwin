@@ -1,16 +1,23 @@
 import React from 'react';
-import { Plus, Minus, Compass, Move3d } from 'lucide-react';
+import { Plus, Minus, Compass, Move3d, Trees, Eye } from 'lucide-react';
 import { CesiumViewerManager } from '../../cesium/viewer';
 import { AmazonRegionControl } from './AmazonRegionControl';
 import { FireFocusControl } from './FireFocusControl';
 import { SelectedLocation } from '../../geospatial/coordinates';
+import { AMAZON_STUDY_REGION } from '../../config/studyRegion';
 import * as Cesium from 'cesium';
 
 interface CameraControlsProps {
   onSelectLocation?: (loc: SelectedLocation) => void;
+  onToggleForestPanel?: () => void;
+  isForestPanelOpen?: boolean;
 }
 
-export const CameraControls: React.FC<CameraControlsProps> = ({ onSelectLocation }) => {
+export const CameraControls: React.FC<CameraControlsProps> = ({
+  onSelectLocation,
+  onToggleForestPanel,
+  isForestPanelOpen = false,
+}) => {
   const manager = CesiumViewerManager.getInstance();
 
   const handleZoomIn = () => {
@@ -47,6 +54,13 @@ export const CameraControls: React.FC<CameraControlsProps> = ({ onSelectLocation
       },
       duration: 1.0,
     });
+  };
+
+  const handleCanopyWalk = () => {
+    manager.flyToCanopyLevel(
+      AMAZON_STUDY_REGION.center.latitude,
+      AMAZON_STUDY_REGION.center.longitude
+    );
   };
 
   return (
@@ -99,6 +113,40 @@ export const CameraControls: React.FC<CameraControlsProps> = ({ onSelectLocation
       >
         <Move3d size={20} />
       </button>
+
+      {/* Canopy Walk 3D View */}
+      <button
+        onClick={handleCanopyWalk}
+        className="glass-button"
+        title="Canopy Walk — Fly down to 3D Tree Crowns"
+        style={{
+          width: '40px',
+          height: '40px',
+          color: 'var(--accent-forest)',
+          borderColor: 'var(--accent-forest-border)',
+          background: 'var(--accent-forest-subtle)',
+        }}
+      >
+        <Eye size={18} />
+      </button>
+
+      {/* Toggle 3D Rainforest Forest Panel */}
+      {onToggleForestPanel && (
+        <button
+          onClick={onToggleForestPanel}
+          className="glass-button"
+          title="Toggle 3D Rainforest Vegetation & Scorch Panel"
+          style={{
+            width: '40px',
+            height: '40px',
+            color: isForestPanelOpen ? 'var(--accent-forest)' : 'var(--text-secondary)',
+            borderColor: isForestPanelOpen ? 'var(--accent-forest)' : 'var(--border-color)',
+            background: isForestPanelOpen ? 'var(--accent-forest-subtle)' : 'var(--bg-surface)',
+          }}
+        >
+          <Trees size={18} />
+        </button>
+      )}
 
       <div style={{ height: '1px', background: 'var(--bg-surface-border)', margin: '4px 0' }} />
 
