@@ -167,6 +167,29 @@ export const FireSpreadPanel: React.FC<FireSpreadPanelProps> = ({
             </div>
           </div>
 
+          {/* River Crossing / Ember Spotting Alert Banner */}
+          {currentStep.geometry.spotFires && currentStep.geometry.spotFires.length > 0 && (
+            <div
+              style={{
+                backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '6px 8px',
+                fontSize: '0.66rem',
+                color: '#b45309',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                lineHeight: 1.3
+              }}
+            >
+              <span style={{ fontSize: '0.85rem' }}>🌊</span>
+              <div>
+                <strong>Ember Spotting:</strong> Embers jumped river barrier ({currentStep.geometry.spotFires[0].jumpDistanceMeters}m jump) spawning {currentStep.geometry.spotFires.length} spot fire(s) downwind!
+              </div>
+            </div>
+          )}
+
           {/* Primary Metrics Grid */}
           <div
             style={{

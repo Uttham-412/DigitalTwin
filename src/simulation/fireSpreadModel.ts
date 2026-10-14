@@ -23,7 +23,8 @@ import {
   SpreadTimestepResult,
   SpreadSimulationResult,
   SectorRadius,
-  FireFrontGeometry
+  FireFrontGeometry,
+  SpotFire
 } from './fireScenarioTypes';
 import { fuelService, SpatialBurnabilityChecker } from '../geospatial/fuelService';
 
@@ -278,6 +279,7 @@ export class FireSpreadModel {
       const hotZoneCoords: Coordinates[] = [];
       const burnedAreaCoords: Coordinates[] = [];
       const waterExclusionSectors: number[] = [];
+      const activeSpotFires: SpotFire[] = [];
 
       let totalROS = 0;
       let maxRadius = 0;
@@ -332,11 +334,96 @@ export class FireSpreadModel {
               cellBurnability.isBurnable === false;
 
             if (isCellBlocked) {
-              // Clamp propagation at the water / non-burnable boundary!
+              // Direct surface fire clamps at the water/barrier edge
               clampedRadius = Math.max(0, dist - stepSizeMeters);
               isWaterBlocked = true;
               waterExclusionSectors.push(i);
               anyWaterClamping = true;
+
+              // EMBER SPOTTING & RIVER CROSSING MECHANISM:
+              // If wind carries embers across water body in downwind sectors (within 60 deg of wind heading)
+              const isWaterBody = cellBurnability.isWater || cellBurnability.burnabilityStatus === 'WATER';
+              const windDiffDeg = Math.abs(((thetaDeg - windTowardsDeg + 540) % 360) - 180);
+
+              if (isWaterBody && windDiffDeg <= 60 && hours > 0) {
+                // Compute maximum spotting distance based on wind speed and fuel dryness
+                const drynessCoeff = Math.max(0.6, 1.4 - (envObs.relativeHumidity / 100));
+                const maxSpottingDistMeters = Math.round(
+                  Math.max(200, (windSpeed * 35) * Math.cos((windDiffDeg * Math.PI) / 180) * drynessCoeff)
+                );
+
+                const waterEdgeDist = clampedRadius;
+                const waterEdgeLat = (waterEdgeDist * Math.cos(thetaRad)) / 111320;
+                const waterEdgeLng = (waterEdgeDist * Math.sin(thetaRad)) / (111320 * Math.cos((lat0 * Math.PI) / 180));
+                const waterEdgeCoord: Coordinates = {
+                  latitude: parseFloat((lat0 + waterEdgeLat).toFixed(6)),
+                  longitude: parseFloat((lng0 + waterEdgeLng).toFixed(6))
+                };
+
+                // Scan across the water gap to detect the opposite river bank
+                const scanStep = Math.max(25, Math.min(80, stepSizeMeters));
+                for (let sDist = dist + scanStep; sDist <= dist + maxSpottingDistMeters; sDist += scanStep) {
+                  const sLat = (sDist * Math.cos(thetaRad)) / 111320;
+                  const sLng = (sDist * Math.sin(thetaRad)) / (111320 * Math.cos((lat0 * Math.PI) / 180));
+                  const scanPt: Coordinates = {
+                    latitude: parseFloat((lat0 + sLat).toFixed(6)),
+                    longitude: parseFloat((lng0 + sLng).toFixed(6))
+                  };
+
+                  const scanBurnability = spatialBurnability
+                    ? spatialBurnability(scanPt)
+                    : fuelService.checkBurnabilitySync(scanPt);
+
+                  const isOppositeWater = scanBurnability.isWater || scanBurnability.burnabilityStatus === 'WATER';
+
+                  if (!isOppositeWater && scanBurnability.isBurnable !== false) {
+                    // Opposite bank found within ember jump reach!
+                    const jumpDistMeters = Math.round(sDist - waterEdgeDist);
+
+                    // Don't spawn duplicate spot fires too close to an existing one in this timestep
+                    const isDuplicate = activeSpotFires.some((sf) => {
+                      const dLat = Math.abs(sf.ignitionCoordinates.latitude - scanPt.latitude) * 111320;
+                      const dLng = Math.abs(sf.ignitionCoordinates.longitude - scanPt.longitude) * 111320;
+                      return Math.sqrt(dLat * dLat + dLng * dLng) < 120;
+                    });
+
+                    if (!isDuplicate) {
+                      // Calculate spot fire expansion radius on opposite bank
+                      const remainingFraction = Math.max(0.2, 1 - (dist / intendedRadius));
+                      const spotRadius = Math.max(30, Math.min(250, Math.round(rosSector * 60 * hours * remainingFraction * 0.4)));
+
+                      const spotPerimeter: Coordinates[] = [];
+                      for (let k = 0; k < 16; k++) {
+                        const kAngle = (k * 360) / 16;
+                        const kRad = (kAngle * Math.PI) / 180;
+                        const kCos = Math.cos(((kAngle - windTowardsDeg) * Math.PI) / 180);
+                        const kR = spotRadius * (1 + 0.3 * kCos);
+                        const kdLat = (kR * Math.cos(kRad)) / 111320;
+                        const kdLng = (kR * Math.sin(kRad)) / (111320 * Math.cos((scanPt.latitude * Math.PI) / 180));
+                        spotPerimeter.push({
+                          latitude: parseFloat((scanPt.latitude + kdLat).toFixed(6)),
+                          longitude: parseFloat((scanPt.longitude + kdLng).toFixed(6))
+                        });
+                      }
+
+                      const spotAreaHa = parseFloat(((Math.PI * spotRadius * spotRadius) / 10000).toFixed(2));
+
+                      activeSpotFires.push({
+                        id: `spot_${i}_${hours}h`,
+                        originCoordinates: waterEdgeCoord,
+                        ignitionCoordinates: scanPt,
+                        jumpDistanceMeters: jumpDistMeters,
+                        radiusMeters: spotRadius,
+                        perimeterCoordinates: spotPerimeter,
+                        areaHectares: Math.max(0.2, spotAreaHa),
+                        bearingDegrees: thetaDeg
+                      });
+                    }
+                    break;
+                  }
+                }
+              }
+
               break;
             }
           }
@@ -398,7 +485,7 @@ export class FireSpreadModel {
         const dThetaRad = (10 * Math.PI) / 180;
         areaMetersSq += 0.5 * r1 * r2 * Math.sin(dThetaRad);
       }
-      const affectedAreaHectares = Math.round((areaMetersSq / 10000) * 10) / 10;
+      let affectedAreaHectares = Math.round((areaMetersSq / 10000) * 10) / 10;
 
       // Net Vector Orientation
       const netWindRad = (windTowardsDeg * Math.PI) / 180;
@@ -426,8 +513,18 @@ export class FireSpreadModel {
         dominantFactor = 'Terrain Slope & Aspect Gradient Vector';
       }
 
+      let spotFiresTotalAreaHa = 0;
+      for (const sf of activeSpotFires) {
+        spotFiresTotalAreaHa += sf.areaHectares;
+      }
+      affectedAreaHectares = parseFloat((affectedAreaHectares + spotFiresTotalAreaHa).toFixed(2));
+
       if (waterExclusionSectors.length > 0) {
         dominantFactor += ` (Water Barrier Exclusion: ${waterExclusionSectors.length} sectors)`;
+      }
+
+      if (activeSpotFires.length > 0) {
+        dominantFactor += ` • 🌊 Ember Spotting: ${activeSpotFires.length} spot fire(s) jumped river (${activeSpotFires[0].jumpDistanceMeters}m)`;
       }
 
       const geometry: FireFrontGeometry = {
@@ -435,7 +532,8 @@ export class FireSpreadModel {
         hotZoneCoordinates: hotZoneCoords,
         burnedAreaCoordinates: burnedAreaCoords,
         sectorRadii,
-        waterExclusionSectors
+        waterExclusionSectors,
+        spotFires: activeSpotFires
       };
 
       timesteps[horizon] = {

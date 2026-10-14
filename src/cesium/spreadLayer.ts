@@ -19,6 +19,7 @@ export class SpreadLayerManager {
   private hotZoneEntity: Cesium.Entity | null = null;
   private burnedCoreEntity: Cesium.Entity | null = null;
   private ignitionMarkerEntity: Cesium.Entity | null = null;
+  private spotFireEntities: Cesium.Entity[] = [];
 
   public static getInstance(): SpreadLayerManager {
     if (!SpreadLayerManager.instance) {
@@ -171,6 +172,74 @@ export class SpreadLayerManager {
         }
       });
 
+      // 5. Render Spot Fires (River-crossing secondary ignitions)
+      if (geom.spotFires && geom.spotFires.length > 0) {
+        for (const sf of geom.spotFires) {
+          // 5a. Ember Flight Trajectory Vector (Amber Dashed Line)
+          const emberTrajectory = viewer.entities.add({
+            name: `Ember Jump Trajectory (${sf.jumpDistanceMeters}m)`,
+            polyline: {
+              positions: [
+                Cesium.Cartesian3.fromDegrees(sf.originCoordinates.longitude, sf.originCoordinates.latitude),
+                Cesium.Cartesian3.fromDegrees(sf.ignitionCoordinates.longitude, sf.ignitionCoordinates.latitude)
+              ],
+              width: 2,
+              material: new Cesium.PolylineDashMaterialProperty({
+                color: Cesium.Color.fromCssColorString('#F59E0B'),
+                dashLength: 16.0
+              }),
+              clampToGround: true
+            }
+          });
+          this.spotFireEntities.push(emberTrajectory);
+
+          // 5b. Spot Fire Secondary Combustion Polygon
+          const sfPoly = cleanPolyCoords(sf.perimeterCoordinates);
+          if (sfPoly.length >= 3) {
+            const sfEntity = viewer.entities.add({
+              name: `Spot Fire (${sf.jumpDistanceMeters}m River Crossing)`,
+              polygon: {
+                hierarchy: new Cesium.PolygonHierarchy(sfPoly),
+                material: new Cesium.ColorMaterialProperty(
+                  Cesium.Color.fromCssColorString('#EF4444').withAlpha(0.60)
+                ),
+                outline: true,
+                outlineColor: Cesium.Color.fromCssColorString('#F97316'),
+                outlineWidth: 2,
+                heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+              }
+            });
+            this.spotFireEntities.push(sfEntity);
+          }
+
+          // 5c. Spot Fire Ignition Marker
+          const sfMarker = viewer.entities.add({
+            name: 'Spot Fire Ignition Center',
+            position: Cesium.Cartesian3.fromDegrees(sf.ignitionCoordinates.longitude, sf.ignitionCoordinates.latitude),
+            point: {
+              pixelSize: 8,
+              color: Cesium.Color.fromCssColorString('#F59E0B'),
+              outlineColor: Cesium.Color.fromCssColorString('#EF4444'),
+              outlineWidth: 2,
+              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+            },
+            description: `
+              <div style="font-family: Inter, sans-serif; padding: 10px; min-width: 200px;">
+                <h4 style="color: #F59E0B; margin: 0 0 6px 0; border-bottom: 1px solid #F59E0B; padding-bottom: 4px;">
+                  🌊 RIVER CROSSING SPOT FIRE
+                </h4>
+                <p style="margin: 3px 0;"><strong>Ember Jump:</strong> ${sf.jumpDistanceMeters} meters</p>
+                <p style="margin: 3px 0;"><strong>Spot Fire Area:</strong> ${sf.areaHectares} ha</p>
+                <p style="margin: 3px 0; font-size: 0.72rem; color: #9CA3AF;">
+                  Secondary ignition spawned across natural water barrier via wind lofting.
+                </p>
+              </div>
+            `
+          });
+          this.spotFireEntities.push(sfMarker);
+        }
+      }
+
       viewer.scene.requestRender();
     } catch (err) {
       console.warn('[Land8Fire Cesium] Spread rendering warning:', err);
@@ -199,6 +268,10 @@ export class SpreadLayerManager {
       viewer.entities.remove(this.ignitionMarkerEntity);
       this.ignitionMarkerEntity = null;
     }
+    for (const ent of this.spotFireEntities) {
+      viewer.entities.remove(ent);
+    }
+    this.spotFireEntities = [];
 
     viewer.scene.requestRender();
   }
@@ -209,6 +282,9 @@ export class SpreadLayerManager {
     if (this.hotZoneEntity) this.hotZoneEntity.show = visible;
     if (this.burnedCoreEntity) this.burnedCoreEntity.show = visible;
     if (this.ignitionMarkerEntity) this.ignitionMarkerEntity.show = visible;
+    for (const ent of this.spotFireEntities) {
+      ent.show = visible;
+    }
     viewer.scene.requestRender();
   }
 }

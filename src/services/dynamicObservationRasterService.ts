@@ -62,6 +62,20 @@ export class DynamicObservationRasterService {
       }
     }
 
+    const spotFires = currentStep?.geometry?.spotFires;
+    if (spotFires && spotFires.length > 0) {
+      for (const sf of spotFires) {
+        if (sf.perimeterCoordinates) {
+          for (const pt of sf.perimeterCoordinates) {
+            if (pt.latitude < minLat) minLat = pt.latitude;
+            if (pt.latitude > maxLat) maxLat = pt.latitude;
+            if (pt.longitude < minLon) minLon = pt.longitude;
+            if (pt.longitude > maxLon) maxLon = pt.longitude;
+          }
+        }
+      }
+    }
+
     // Minimum visual window: ~0.025 degrees (~2.8 km)
     // Add margin around the active perimeter
     const latSpan = Math.max(0.024, (maxLat - minLat) * 1.6);
@@ -270,6 +284,57 @@ export class DynamicObservationRasterService {
       pCtx.closePath();
       pCtx.fill();
       pCtx.restore();
+
+      // Draw secondary spot fires ignited across water barriers on both canvases
+      if (currentStep?.geometry?.spotFires && currentStep.geometry.spotFires.length > 0) {
+        for (const sf of currentStep.geometry.spotFires) {
+          if (sf.perimeterCoordinates && sf.perimeterCoordinates.length >= 3) {
+            const sfPts = sf.perimeterCoordinates.map((pt) => ({
+              x: ((pt.longitude - bbox.minLon) / (bbox.maxLon - bbox.minLon)) * 256,
+              y: ((bbox.maxLat - pt.latitude) / (bbox.maxLat - bbox.minLat)) * 256
+            }));
+
+            // Binary Mask spot fire (#8b1d24)
+            mCtx.fillStyle = '#8b1d24';
+            mCtx.beginPath();
+            mCtx.moveTo(sfPts[0].x, sfPts[0].y);
+            for (let i = 1; i < sfPts.length; i++) {
+              mCtx.lineTo(sfPts[i].x, sfPts[i].y);
+            }
+            mCtx.closePath();
+            mCtx.fill();
+
+            // Probability Colormap spot fire (#e11d48 with #ea580c border)
+            pCtx.fillStyle = '#ea580c';
+            pCtx.beginPath();
+            pCtx.moveTo(sfPts[0].x, sfPts[0].y);
+            for (let i = 1; i < sfPts.length; i++) {
+              pCtx.lineTo(sfPts[i].x, sfPts[i].y);
+            }
+            pCtx.closePath();
+            pCtx.fill();
+
+            let sfcx = 0, sfcy = 0;
+            for (const sp of sfPts) { sfcx += sp.x; sfcy += sp.y; }
+            sfcx /= sfPts.length;
+            sfcy /= sfPts.length;
+
+            pCtx.save();
+            pCtx.translate(sfcx, sfcy);
+            pCtx.scale(0.7, 0.7);
+            pCtx.translate(-sfcx, -sfcy);
+            pCtx.fillStyle = '#e11d48';
+            pCtx.beginPath();
+            pCtx.moveTo(sfPts[0].x, sfPts[0].y);
+            for (let i = 1; i < sfPts.length; i++) {
+              pCtx.lineTo(sfPts[i].x, sfPts[i].y);
+            }
+            pCtx.closePath();
+            pCtx.fill();
+            pCtx.restore();
+          }
+        }
+      }
     } else {
       // Default initial ignition spot if spread not yet calculated
       const cx = ((lon - bbox.minLon) / (bbox.maxLon - bbox.minLon)) * 256;

@@ -7,11 +7,11 @@ interface ComparisonPanelProps {
   simulationClockTime: string;
   unetOutput: GeoreferencedUNetOutput | null;
   comparisonMetrics: ComparisonMetrics | null;
-  showPrediction: boolean;
+  showPrediction?: boolean;
   showGroundTruth: boolean;
   showSimulation: boolean;
   showWaterContext?: boolean;
-  onTogglePrediction: () => void;
+  onTogglePrediction?: () => void;
   onToggleGroundTruth: () => void;
   onToggleSimulation: () => void;
   onToggleWaterContext?: () => void;
@@ -22,11 +22,9 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
   simulationClockTime,
   unetOutput,
   comparisonMetrics,
-  showPrediction,
   showGroundTruth,
   showSimulation,
   showWaterContext = true,
-  onTogglePrediction,
   onToggleGroundTruth,
   onToggleSimulation,
   onToggleWaterContext,
@@ -150,25 +148,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
               </button>
             </div>
 
-            {/* 2. U-Net Model Prediction Layer */}
-            <div style={layerRowStyle}>
-              <div>
-                <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#dc2626' }}>
-                  U-Net prediction
-                </span>
-                <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'block' }}>
-                  Burned area mask (τ = 0.65)
-                </span>
-              </div>
-              <button
-                onClick={isSatelliteAvailable ? onTogglePrediction : undefined}
-                disabled={!isSatelliteAvailable}
-                style={toggleBtnStyle(showPrediction && isSatelliteAvailable, '#dc2626', !isSatelliteAvailable)}
-              >
-                {showPrediction && isSatelliteAvailable ? <Eye size={11} /> : <EyeOff size={11} />}
-                <span>{showPrediction && isSatelliteAvailable ? 'Visible' : 'Hidden'}</span>
-              </button>
-            </div>
+
 
             {/* 3. Water Mask Layer */}
             {unetOutput?.waterMaskUrl && onToggleWaterContext && (

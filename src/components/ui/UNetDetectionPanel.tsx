@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import {
   Satellite,
-  Eye,
-  EyeOff,
   AlertTriangle,
   RefreshCw,
   X,
@@ -13,7 +11,6 @@ import {
 } from 'lucide-react';
 import { SimulationAssessmentRequest } from '../../services/simulationAssessmentCoordinator';
 import { GeoreferencedUNetOutput } from '../../geospatial/unetResultGeoReference';
-import { UNetVisualizationMode } from '../../cesium/unetPredictionLayer';
 import { SpreadHorizon } from '../../simulation/fireScenarioTypes';
 
 export interface UNetDetectionPanelProps {
@@ -25,10 +22,8 @@ export interface UNetDetectionPanelProps {
   currentIgnitionLon?: number;
   isSimulatedFireActive?: boolean;
   selectedHorizon?: SpreadHorizon;
-  showPredictionOnMap: boolean;
-  onTogglePredictionOnMap: () => void;
-  visualizationMode: UNetVisualizationMode;
-  onSelectVisualizationMode: (mode: UNetVisualizationMode) => void;
+  showPredictionOnMap?: boolean;
+  onTogglePredictionOnMap?: () => void;
   onRetryAssessment?: () => void;
   isLoading?: boolean;
 }
@@ -44,10 +39,6 @@ export const UNetDetectionPanel: React.FC<UNetDetectionPanelProps> = ({
   currentIgnitionLon,
   isSimulatedFireActive,
   selectedHorizon,
-  showPredictionOnMap,
-  onTogglePredictionOnMap,
-  visualizationMode,
-  onSelectVisualizationMode,
   onRetryAssessment,
   isLoading = false,
 }) => {
@@ -722,81 +713,6 @@ export const UNetDetectionPanel: React.FC<UNetDetectionPanelProps> = ({
               </div>
 
 
-              {/* 3D Map Overlay Control */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '8px 10px',
-                  background: 'var(--bg-surface-secondary)',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border-color)',
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    3D map overlay
-                  </span>
-                  <span style={{ fontSize: '0.64rem', color: 'var(--text-secondary)' }}>
-                    Off by default to keep simulation unobstructed
-                  </span>
-                </div>
-
-                <button
-                  onClick={onTogglePredictionOnMap}
-                  className="glass-button"
-                  style={{
-                    padding: '4px 10px',
-                    fontSize: '0.70rem',
-                    fontWeight: 600,
-                    gap: '6px',
-                    color: showPredictionOnMap ? 'var(--status-success)' : 'var(--text-secondary)',
-                    borderColor: showPredictionOnMap ? 'var(--status-success-border)' : 'var(--border-color)',
-                    background: showPredictionOnMap ? 'var(--status-success-bg)' : 'var(--bg-surface)',
-                  }}
-                >
-                  {showPredictionOnMap ? <Eye size={12} /> : <EyeOff size={12} />}
-                  <span>{showPredictionOnMap ? 'Showing on map' : 'Hidden on map'}</span>
-                </button>
-              </div>
-
-              {/* If map overlay is ON, show clean mode switcher */}
-              {showPredictionOnMap && (
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(4, 1fr)',
-                    gap: '4px',
-                  }}
-                >
-                  {(
-                    [
-                      { id: 'QUALITY_CONTROL', label: 'QC view' },
-                      { id: 'SENTINEL2_RGB', label: 'RGB' },
-                      { id: 'BINARY_MASK', label: 'Mask' },
-                      { id: 'PROBABILITY_HEATMAP', label: 'Heatmap' },
-                    ] as const
-                  ).map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => onSelectVisualizationMode(m.id)}
-                      style={{
-                        background: visualizationMode === m.id ? 'var(--accent-forest-subtle)' : 'var(--bg-surface)',
-                        border: visualizationMode === m.id ? '1px solid var(--accent-forest)' : '1px solid var(--border-color)',
-                        color: visualizationMode === m.id ? 'var(--accent-forest-dark)' : 'var(--text-secondary)',
-                        borderRadius: '4px',
-                        padding: '3px 6px',
-                        fontSize: '0.64rem',
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-              )}
 
               {/* 7. Collapsible Technical Details Section */}
               <div

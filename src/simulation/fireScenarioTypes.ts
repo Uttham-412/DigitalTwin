@@ -45,12 +45,24 @@ export interface SectorRadius {
   isWaterBlocked?: boolean;
 }
 
+export interface SpotFire {
+  id: string;
+  originCoordinates: Coordinates;
+  ignitionCoordinates: Coordinates;
+  jumpDistanceMeters: number;
+  radiusMeters: number;
+  perimeterCoordinates: Coordinates[];
+  areaHectares: number;
+  bearingDegrees: number;
+}
+
 export interface FireFrontGeometry {
   activePerimeterCoordinates: Coordinates[]; // 36 boundary polygon coordinates
   hotZoneCoordinates: Coordinates[];          // Inner ring boundary (0.85 * r)
   burnedAreaCoordinates: Coordinates[];        // Core burned region boundary
   sectorRadii: SectorRadius[];                 // 36 radial readings
   waterExclusionSectors?: number[];            // Indices of sectors stopped by water
+  spotFires?: SpotFire[];                      // Secondary fires ignited across water barriers via ember spotting
 }
 
 export interface SpreadTimestepResult {

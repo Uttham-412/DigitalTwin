@@ -17,7 +17,7 @@ import { FireMarkerManager } from './cesium/fireMarker';
 import { WildfireLayerManager } from './cesium/wildfireLayer';
 import { SpreadLayerManager } from './cesium/spreadLayer';
 import { StudyRegionLayerManager } from './cesium/studyRegionLayer';
-import { uNetPredictionLayerManager, UNetVisualizationMode } from './cesium/unetPredictionLayer';
+import { uNetPredictionLayerManager } from './cesium/unetPredictionLayer';
 import { CesiumViewerManager } from './cesium/viewer';
 import { ImageryType, setImageryLayer } from './cesium/imagery';
 import { AMAZON_REAL_WILDFIRE_OBSERVATIONS } from './wildfire/fireObservation';
@@ -58,12 +58,10 @@ export function App() {
   const [georefOutput, setGeorefOutput] = useState<GeoreferencedUNetOutput | null>(null);
   const [isInferenceLoading, setIsInferenceLoading] = useState<boolean>(false);
 
-  // Layer Visibility Toggles (Phase 3H: Prediction mask defaults to OFF on 3D globe)
-  const [showPredictionLayer, setShowPredictionLayer] = useState<boolean>(false);
+  // Layer Visibility Toggles
   const [showGroundTruthLayer, setShowGroundTruthLayer] = useState<boolean>(true);
   const [showSimulationLayer, setShowSimulationLayer] = useState<boolean>(true);
   const [showWaterContextLayer, setShowWaterContextLayer] = useState<boolean>(true);
-  const [visualizationMode, setVisualizationMode] = useState<UNetVisualizationMode>('QUALITY_CONTROL');
 
   // Simulation-Triggered U-Net Assessment & Dedicated Detection Panel State (Phase 3H)
   const [assessmentRequest, setAssessmentRequest] = useState<SimulationAssessmentRequest | null>(null);
@@ -83,13 +81,12 @@ export function App() {
         const manager = CesiumViewerManager.getInstance();
         const viewer = manager.getViewer();
         if (viewer) {
-          // Phase 3H: Update layers in Cesium respecting showPredictionLayer (defaults to false)
           uNetPredictionLayerManager.updateLayers(
             viewer,
             req.georeferencedOutput,
             showGroundTruthLayer,
-            visualizationMode,
-            showPredictionLayer
+            'QUALITY_CONTROL',
+            false
           );
         }
       } else if (
@@ -118,7 +115,7 @@ export function App() {
       }
     });
     return unsubscribe;
-  }, [showGroundTruthLayer, visualizationMode, showPredictionLayer]);
+  }, [showGroundTruthLayer]);
 
   // Simulated Fire & Spread Scenario State (Phase 1)
   const [isSimulatedFireActive, setIsSimulatedFireActive] = useState<boolean>(false);
@@ -264,44 +261,6 @@ export function App() {
     }
   }, []);
 
-  const handleSelectEnvIndex = useCallback((index: number) => {
-    isSyncingHorizonRef.current = false;
-    setEnvTimeline((prev) => {
-      if (!prev) return null;
-      const updated = { ...prev, selectedIndex: index };
-      const selectedObs = updated.observations[index];
-      if (selectedObs) {
-        simulationClockManager.setAuthoritativeTime(selectedObs.timestamp);
-
-        // Bi-directional synchronization: Map selected environmental observation time to closest SpreadHorizon
-        if (isSimulatedFireActive && spreadResult) {
-          const ignitionTime = spreadResult.initialFireState?.timestamp || updated.observations[0]?.timestamp;
-          const diffHours = (new Date(selectedObs.timestamp).getTime() - new Date(ignitionTime).getTime()) / (3600 * 1000);
-
-          let targetHorizon: SpreadHorizon = '+1H';
-          if (diffHours <= 0.5) targetHorizon = '+0H';
-          else if (diffHours <= 1.5) targetHorizon = '+1H';
-          else if (diffHours <= 4.0) targetHorizon = '+2H';
-          else if (diffHours <= 9.0) targetHorizon = '+6H';
-          else if (diffHours <= 18.0) targetHorizon = '+12H';
-          else targetHorizon = '+24H';
-
-          setSelectedHorizon(targetHorizon);
-          simulationClockManager.setHorizon(targetHorizon);
-
-          if (spreadResult.timesteps[targetHorizon]) {
-            const manager = CesiumViewerManager.getInstance();
-            const viewer = manager.getViewer();
-            if (viewer) {
-              SpreadLayerManager.getInstance().renderSpreadPrediction(viewer, spreadResult.timesteps[targetHorizon]);
-            }
-            simulationAssessmentCoordinator.updateAssessmentWithPerimeter(spreadResult, targetHorizon);
-          }
-        }
-      }
-      return updated;
-    });
-  }, [isSimulatedFireActive, spreadResult]);
 
   // Execute Phase 2A -> Phase 2B -> Phase 2C Satellite U-Net Pipeline via Assessment Coordinator
   const handleRunInference = useCallback(async () => {
@@ -569,14 +528,6 @@ export function App() {
   }, [selectedHorizon, handleSelectHorizon]);
 
   // Handle Layer Visibility Toggles
-  const handleTogglePredictionLayer = useCallback(() => {
-    setShowPredictionLayer((prev) => {
-      const next = !prev;
-      uNetPredictionLayerManager.setPredictionVisibility(next);
-      return next;
-    });
-  }, []);
-
   const handleToggleGroundTruthLayer = useCallback(() => {
     setShowGroundTruthLayer((prev) => {
       const next = !prev;
@@ -603,11 +554,6 @@ export function App() {
       uNetPredictionLayerManager.setWaterContextVisibility(next);
       return next;
     });
-  }, []);
-
-  const handleSelectVisualizationMode = useCallback((mode: UNetVisualizationMode) => {
-    setVisualizationMode(mode);
-    uNetPredictionLayerManager.setVisualizationMode(mode);
   }, []);
 
   return (
@@ -666,11 +612,9 @@ export function App() {
               simulationClockTime={simulationClockManager.getState().currentSimulationTime}
               unetOutput={georefOutput}
               comparisonMetrics={comparisonMetrics}
-              showPrediction={showPredictionLayer}
               showGroundTruth={showGroundTruthLayer}
               showSimulation={showSimulationLayer}
               showWaterContext={showWaterContextLayer}
-              onTogglePrediction={handleTogglePredictionLayer}
               onToggleGroundTruth={handleToggleGroundTruthLayer}
               onToggleSimulation={handleToggleSimulationLayer}
               onToggleWaterContext={handleToggleWaterContextLayer}
@@ -702,10 +646,9 @@ export function App() {
         )}
       </div>
 
-      {/* Time-Aware Environmental Intelligence Panel */}
+      {/* Environmental Parameters Panel */}
       <EnvironmentalPanel
         timeline={envTimeline}
-        onSelectIndex={handleSelectEnvIndex}
         isOpen={isEnvPanelOpen}
         onClose={() => setIsEnvPanelOpen(false)}
         isLoading={isEnvLoading}
@@ -714,7 +657,7 @@ export function App() {
       {/* Floating Navigation Controls */}
       <CameraControls onSelectLocation={handleSelectLocation} />
 
-      {/* Quick Action Button to Toggle Environmental Intelligence Panel */}
+      {/* Quick Action Button to Toggle Environmental Parameters Panel */}
       <div style={{ position: 'absolute', bottom: '24px', left: '20px', zIndex: 20 }}>
         <EnvironmentalFocusControl
           isOpen={isEnvPanelOpen}
@@ -738,10 +681,6 @@ export function App() {
         currentIgnitionLon={selectedLocation?.longitude}
         isSimulatedFireActive={isSimulatedFireActive}
         selectedHorizon={selectedHorizon}
-        showPredictionOnMap={showPredictionLayer}
-        onTogglePredictionOnMap={handleTogglePredictionLayer}
-        visualizationMode={visualizationMode}
-        onSelectVisualizationMode={handleSelectVisualizationMode}
         onRetryAssessment={() => simulationAssessmentCoordinator.retryAssessment()}
         isLoading={isInferenceLoading}
       />

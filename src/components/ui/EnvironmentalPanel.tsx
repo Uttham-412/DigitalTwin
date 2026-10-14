@@ -8,7 +8,6 @@ import { computeEquilibriumMoistureContent } from '../../simulation/fireSpreadMo
 
 interface EnvironmentalPanelProps {
   timeline: EnvironmentalTimeline | null;
-  onSelectIndex: (index: number) => void;
   isOpen: boolean;
   onClose: () => void;
   isLoading?: boolean;
@@ -16,7 +15,6 @@ interface EnvironmentalPanelProps {
 
 export const EnvironmentalPanel: React.FC<EnvironmentalPanelProps> = ({
   timeline,
-  onSelectIndex,
   isOpen,
   onClose,
   isLoading = false
@@ -30,7 +28,7 @@ export const EnvironmentalPanel: React.FC<EnvironmentalPanelProps> = ({
 
   return (
     <aside
-      aria-label="Environmental panel"
+      aria-label="Environmental parameters panel"
       className="glass-panel"
       style={{
         position: 'absolute',
@@ -75,7 +73,7 @@ export const EnvironmentalPanel: React.FC<EnvironmentalPanelProps> = ({
               letterSpacing: '-0.01em',
             }}
           >
-            Environmental Panel
+            Environmental Parameters
           </h3>
         </div>
         <button
@@ -393,59 +391,6 @@ export const EnvironmentalPanel: React.FC<EnvironmentalPanelProps> = ({
                 />
                 <div style={{ width: '2px', height: '25px', backgroundColor: 'var(--color-fire)' }} />
               </div>
-            </div>
-          </div>
-
-          {/* Time Scrubber */}
-          <div
-            style={{
-              backgroundColor: 'var(--bg-surface-secondary)',
-              padding: '10px 12px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-color)',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: '0.68rem',
-                color: 'var(--text-secondary)',
-                marginBottom: '6px',
-                fontWeight: 500,
-              }}
-            >
-              <span style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>TIME SELECTION</span>
-              <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                {currentObs.formattedTime} UTC
-              </span>
-            </div>
-
-            <input
-              type="range"
-              min={0}
-              max={timeline.observations.length - 1}
-              value={timeline.selectedIndex}
-              onChange={(e) => onSelectIndex(parseInt(e.target.value, 10))}
-              style={{
-                width: '100%',
-                accentColor: 'var(--accent-forest)',
-                cursor: 'pointer',
-              }}
-            />
-
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: '0.62rem',
-                color: 'var(--text-secondary)',
-                marginTop: '4px',
-              }}
-            >
-              <span>{timeline.observations[0]?.formattedTime}</span>
-              <span style={{ fontWeight: 600, color: 'var(--accent-forest)' }}>NOW</span>
-              <span>{timeline.observations[timeline.observations.length - 1]?.formattedTime}</span>
             </div>
           </div>
 
