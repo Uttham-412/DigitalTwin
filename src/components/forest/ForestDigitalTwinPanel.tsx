@@ -26,11 +26,9 @@ import {
   Minus,
   MapPin,
   Flame,
-  Satellite,
   CheckCircle2,
   Sliders,
   Activity,
-  BarChart3,
 } from 'lucide-react';
 import { SpreadHorizon } from '../../simulation/fireScenarioTypes';
 import { IgnitionSelectionEvent } from '../../three/AmazonForestScene';
@@ -70,8 +68,8 @@ interface ForestDigitalTwinPanelProps {
   showFireSpreadPrediction: boolean;
   onToggleFireSpreadPrediction: (val: boolean) => void;
 
-  // AI Satellite Evidence
-  onOpenAIEvidence: () => void;
+  // AI Satellite Evidence (Optional)
+  onOpenAIEvidence?: () => void;
 
   // Manual Ignition & Rothermel Simulation Props
   ignitionCandidate?: IgnitionSelectionEvent | null;
@@ -112,7 +110,7 @@ export const ForestDigitalTwinPanel: React.FC<ForestDigitalTwinPanelProps> = ({
   onToggleBurnedArea,
   showFireSpreadPrediction,
   onToggleFireSpreadPrediction,
-  onOpenAIEvidence,
+  onOpenAIEvidence: _onOpenAIEvidence,
   ignitionCandidate,
   isFireActive = false,
   rothermelDiagnostics,
@@ -237,7 +235,8 @@ export const ForestDigitalTwinPanel: React.FC<ForestDigitalTwinPanelProps> = ({
                 color: '#111827',
               }}
             >
-              AMAZON FOREST DIGITAL TWIN
+
+              DIGITAL TWIN
             </h2>
           </div>
 
@@ -286,7 +285,7 @@ export const ForestDigitalTwinPanel: React.FC<ForestDigitalTwinPanelProps> = ({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
+              gridTemplateColumns: 'repeat(3, 1fr)',
               gap: '4px',
               background: '#F3F4F6',
               padding: '3px',
@@ -357,28 +356,6 @@ export const ForestDigitalTwinPanel: React.FC<ForestDigitalTwinPanelProps> = ({
             >
               <Flame size={12} />
               <span>{isFireActive ? 'Active Fire' : 'Ignition'}</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('INSPECTOR')}
-              style={{
-                padding: '6px 2px',
-                fontSize: '0.66rem',
-                fontWeight: activeTab === 'INSPECTOR' ? 700 : 500,
-                background: activeTab === 'INSPECTOR' ? '#FFFFFF' : 'transparent',
-                color: activeTab === 'INSPECTOR' ? '#2563EB' : '#4B5563',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
-                boxShadow: activeTab === 'INSPECTOR' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-              }}
-            >
-              <BarChart3 size={12} />
-              <span>Inspector</span>
             </button>
           </div>
 
@@ -1078,30 +1055,6 @@ export const ForestDigitalTwinPanel: React.FC<ForestDigitalTwinPanelProps> = ({
             </div>
           )}
 
-          {/* Dedicated AI Evidence satellite inspection link */}
-          <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: '8px' }}>
-            <button
-              onClick={onOpenAIEvidence}
-              style={{
-                width: '100%',
-                padding: '7px 10px',
-                borderRadius: '6px',
-                background: '#F0FDF4',
-                border: '1px solid #C4E2CB',
-                color: '#166534',
-                fontSize: '0.72rem',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                cursor: 'pointer',
-              }}
-            >
-              <Satellite size={14} color="#166534" />
-              <span>Inspect U-Net Satellite Evidence</span>
-            </button>
-          </div>
         </>
       )}
     </aside>

@@ -68,16 +68,18 @@ export class LandscapeEcosystemManager {
   private boulderInstances!: THREE.InstancedMesh;
 
   // Developed Structures & Road
+  // Developed Structures & Road
   public cabinMesh?: THREE.Group;
   public watchtowerMesh?: THREE.Group;
   public bridgeMesh?: THREE.Group;
+  public urbanGroup?: THREE.Group;
   public ruralHouseMeshes: THREE.Group[] = [];
   public roadMesh?: THREE.Mesh;
 
   // Tree instance tracker
   public instances: LandscapeTreeInstance[] = [];
 
-  // Road Curve Definition (Winding from valley entry across clearing to watchtower)
+  // Road Curve Definition (Winding from valley entry across bridge to urban center and watchtower)
   public roadPoints: THREE.Vector3[] = [];
 
   public isAssetsLoaded: boolean = false;
@@ -89,39 +91,49 @@ export class LandscapeEcosystemManager {
 
     this.initRoadPath();
     this.buildRoadMesh();
+    this.buildBridgeMesh();
+    this.buildUrbanRegion();
     this.load3DAssets();
   }
 
   /**
-   * Initializes winding dirt access road coordinates across the clearing
+   * Initializes highway and access road coordinates running from the west,
+   * crossing the full-span bridge, and serving the urban settlement district.
    */
   private initRoadPath(): void {
     const pts = [
-      new THREE.Vector3(-450, 0, 180),
-      new THREE.Vector3(-320, 0, 140),
-      new THREE.Vector3(-180, 0, 80),
-      new THREE.Vector3(-60, 0, 20),
-      new THREE.Vector3(20, 0, -20),
-      new THREE.Vector3(70, 0, -80),
-      new THREE.Vector3(120, 0, -140),
+      new THREE.Vector3(-460, 0, 50),
+      new THREE.Vector3(-350, 0, 42),
+      new THREE.Vector3(-275, 0, 30),   // Western bridge abutment
+      new THREE.Vector3(-197.5, 0, 30), // Mid-span above river channel
+      new THREE.Vector3(-120, 0, 30),   // Eastern bridge abutment
+      new THREE.Vector3(-50, 0, 24),    // Urban approach ramp
+      new THREE.Vector3(20, 0, 10),     // Town square entrance
+      new THREE.Vector3(65, 0, -10),    // Central avenue
+      new THREE.Vector3(95, 0, -95),    // Access track ascending to lookout tower
     ];
 
     for (const p of pts) {
-      p.y = this.terrain.getElevationAt(p.x, p.z) + 0.35;
+      if (p.x >= -275 && p.x <= -120) {
+        // Continuous level deck across the river
+        p.y = 20.85;
+      } else {
+        p.y = this.terrain.getElevationAt(p.x, p.z) + 0.35;
+      }
       this.roadPoints.push(p);
     }
   }
 
   /**
-   * Builds the 3D dirt road ribbon following the terrain
+   * Builds the 3D road ribbon following the terrain and bridge deck
    */
   private buildRoadMesh(): void {
     if (this.roadPoints.length < 2) return;
 
     const curve = new THREE.CatmullRomCurve3(this.roadPoints);
-    const numPoints = 80;
+    const numPoints = 120;
     const curvePoints = curve.getPoints(numPoints);
-    const roadWidth = 9.0;
+    const roadWidth = 9.5;
 
     const geom = new THREE.BufferGeometry();
     const positions: number[] = [];
@@ -137,8 +149,13 @@ export class LandscapeEcosystemManager {
       const leftPt = pt.clone().addScaledVector(normal, roadWidth / 2);
       const rightPt = pt.clone().addScaledVector(normal, -roadWidth / 2);
 
-      leftPt.y = this.terrain.getElevationAt(leftPt.x, leftPt.z) + 0.35;
-      rightPt.y = this.terrain.getElevationAt(rightPt.x, rightPt.z) + 0.35;
+      if (pt.x >= -275 && pt.x <= -120) {
+        leftPt.y = 20.88;
+        rightPt.y = 20.88;
+      } else {
+        leftPt.y = this.terrain.getElevationAt(leftPt.x, leftPt.z) + 0.35;
+        rightPt.y = this.terrain.getElevationAt(rightPt.x, rightPt.z) + 0.35;
+      }
 
       positions.push(leftPt.x, leftPt.y, leftPt.z);
       positions.push(rightPt.x, rightPt.y, rightPt.z);
@@ -158,19 +175,530 @@ export class LandscapeEcosystemManager {
     geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geom.setIndex(indices);
 
-    // Weathered packed dirt road material
+    // Weathered asphalt/packed gravel road material
     const roadMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#6E5D46'),
-      roughness: 0.94,
-      metalness: 0.02,
+      color: new THREE.Color('#524941'),
+      roughness: 0.92,
+      metalness: 0.04,
       side: THREE.DoubleSide,
       depthWrite: true,
     });
 
     this.roadMesh = new THREE.Mesh(geom, roadMat);
     this.roadMesh.receiveShadow = true;
-    this.roadMesh.name = 'DirtRoadFirebreak';
+    this.roadMesh.name = 'AccessRoadFirebreak';
     this.group.add(this.roadMesh);
+  }
+
+  /**
+   * Constructs a realistic full-span river bridge spanning from the west bank (-275m)
+   * to the east bank (-120m) across the entire 130m wide river channel.
+   */
+  private buildBridgeMesh(): void {
+    const bridgeGroup = new THREE.Group();
+    bridgeGroup.name = 'FullSpanRiverBridge';
+
+    const spanLength = 155.0; // Spans from X: -275 to -120
+    const bridgeWidth = 10.5;  // Z: 24.75 to 35.25
+    const deckY = 20.8;
+    const centerX = -197.5;
+    const centerZ = 30.0;
+
+    // Materials
+    const asphaltMat = new THREE.MeshStandardMaterial({ color: '#374151', roughness: 0.85, metalness: 0.08 });
+    const concreteMat = new THREE.MeshStandardMaterial({ color: '#9CA3AF', roughness: 0.88, metalness: 0.05 });
+    const steelMat = new THREE.MeshStandardMaterial({ color: '#4B5563', roughness: 0.65, metalness: 0.35 });
+    const yellowStripeMat = new THREE.MeshBasicMaterial({ color: '#FACC15' });
+    const lampMat = new THREE.MeshBasicMaterial({ color: '#FEF08A' });
+
+    // 1. Solid Bridge Road Deck
+    const deckGeom = new THREE.BoxGeometry(spanLength, 0.55, bridgeWidth);
+    const deck = new THREE.Mesh(deckGeom, asphaltMat);
+    deck.position.set(centerX, deckY, centerZ);
+    deck.receiveShadow = true;
+    deck.castShadow = true;
+    bridgeGroup.add(deck);
+
+    // Yellow Center Divider Line
+    const stripeGeom = new THREE.PlaneGeometry(spanLength - 4.0, 0.28);
+    stripeGeom.rotateX(-Math.PI / 2);
+    const stripe = new THREE.Mesh(stripeGeom, yellowStripeMat);
+    stripe.position.set(centerX, deckY + 0.29, centerZ);
+    bridgeGroup.add(stripe);
+
+    // Sidewalk Curbs (Left & Right)
+    const curbGeom = new THREE.BoxGeometry(spanLength, 0.35, 0.8);
+    const leftCurb = new THREE.Mesh(curbGeom, concreteMat);
+    leftCurb.position.set(centerX, deckY + 0.3, centerZ - bridgeWidth / 2 + 0.4);
+    bridgeGroup.add(leftCurb);
+
+    const rightCurb = new THREE.Mesh(curbGeom, concreteMat);
+    rightCurb.position.set(centerX, deckY + 0.3, centerZ + bridgeWidth / 2 - 0.4);
+    bridgeGroup.add(rightCurb);
+
+    // 2. Concrete Abutments on Both Riverbanks
+    const abutmentGeom = new THREE.BoxGeometry(14.0, 6.5, bridgeWidth + 2.0);
+    const westAbutment = new THREE.Mesh(abutmentGeom, concreteMat);
+    westAbutment.position.set(-275, deckY - 2.8, centerZ);
+    westAbutment.castShadow = true;
+    westAbutment.receiveShadow = true;
+    bridgeGroup.add(westAbutment);
+
+    const eastAbutment = new THREE.Mesh(abutmentGeom, concreteMat);
+    eastAbutment.position.set(-120, deckY - 2.8, centerZ);
+    eastAbutment.castShadow = true;
+    eastAbutment.receiveShadow = true;
+    bridgeGroup.add(eastAbutment);
+
+    // 3. Four Heavy Reinforced Concrete Support Piers Standing in Riverbed
+    const pierXCoords = [-240, -200, -165, -135];
+    const pierGeom = new THREE.BoxGeometry(4.8, 7.8, bridgeWidth - 0.5);
+    for (const px of pierXCoords) {
+      const pier = new THREE.Mesh(pierGeom, concreteMat);
+      pier.position.set(px, deckY - 3.8, centerZ);
+      pier.castShadow = true;
+      pier.receiveShadow = true;
+      bridgeGroup.add(pier);
+
+      // Hydrodynamic Cutwater Nose (upstream/downstream triangular wedge)
+      const noseGeom = new THREE.CylinderGeometry(0.1, 2.4, 7.8, 3);
+      const nose = new THREE.Mesh(noseGeom, concreteMat);
+      nose.position.set(px, deckY - 3.8, centerZ - bridgeWidth / 2);
+      nose.rotation.y = Math.PI;
+      bridgeGroup.add(nose);
+    }
+
+    // 4. Steel Safety Guardrails with Horizontal Rails & Vertical Pickets
+    for (const sideZ of [centerZ - bridgeWidth / 2 + 0.1, centerZ + bridgeWidth / 2 - 0.1]) {
+      // Top Handrail
+      const railGeom = new THREE.BoxGeometry(spanLength, 0.15, 0.15);
+      const topRail = new THREE.Mesh(railGeom, steelMat);
+      topRail.position.set(centerX, deckY + 1.25, sideZ);
+      bridgeGroup.add(topRail);
+
+      // Mid Rail
+      const midRail = new THREE.Mesh(railGeom, steelMat);
+      midRail.position.set(centerX, deckY + 0.75, sideZ);
+      bridgeGroup.add(midRail);
+
+      // Vertical Posts Spaced Every 7.5m
+      const postGeom = new THREE.BoxGeometry(0.2, 1.25, 0.2);
+      for (let x = -272; x <= -122; x += 7.5) {
+        const post = new THREE.Mesh(postGeom, steelMat);
+        post.position.set(x, deckY + 0.65, sideZ);
+        bridgeGroup.add(post);
+      }
+    }
+
+    // 5. Eight Bridge Lampposts Spaced Along Span
+    for (let x = -260; x <= -130; x += 38) {
+      for (const lz of [centerZ - bridgeWidth / 2 + 0.35, centerZ + bridgeWidth / 2 - 0.35]) {
+        const poleGeom = new THREE.CylinderGeometry(0.08, 0.12, 3.4, 6);
+        const pole = new THREE.Mesh(poleGeom, steelMat);
+        pole.position.set(x, deckY + 1.7, lz);
+        bridgeGroup.add(pole);
+
+        const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), lampMat);
+        lantern.position.set(x, deckY + 3.4, lz);
+        bridgeGroup.add(lantern);
+      }
+    }
+
+    this.bridgeMesh = bridgeGroup;
+    this.group.add(bridgeGroup);
+  }
+
+  /**
+   * Constructs an attractive, cohesive urban settlement district on the east terrace:
+   * 1. Administrative Town Hall & Civic Headquarters with columned portico, clock tower, and terracotta roof.
+   * 2. Paved central town square plaza with stone fountain and perimeter benches.
+   * 3. 8 distinct residential houses with foundations, verandas, gabled roofs, and stone chimneys.
+   * 4. Logistics warehouse and technical maintenance depot.
+   * 5. Elevated 4-legged fire observation watchtower on the ridge.
+   * 6. Paved avenue grid and warm streetlights.
+   */
+  private buildUrbanRegion(): void {
+    const urbanGroup = new THREE.Group();
+    urbanGroup.name = 'UrbanSettlementDistrict';
+
+    const terraceElev = 26.5;
+
+    // Materials
+    const plazaMat = new THREE.MeshStandardMaterial({ color: '#9CA3AF', roughness: 0.88, metalness: 0.05 });
+    const stoneWallMat = new THREE.MeshStandardMaterial({ color: '#57534E', roughness: 0.90 });
+    const asphaltMat = new THREE.MeshStandardMaterial({ color: '#4B5563', roughness: 0.85 });
+    const lampGlowMat = new THREE.MeshBasicMaterial({ color: '#FEF08A' });
+    const waterBasinMat = new THREE.MeshStandardMaterial({ color: '#0E7490', roughness: 0.1, metalness: 0.2 });
+
+    // Paved settlement roads connecting bridge approach to town center and neighborhoods
+    const townAvenue = new THREE.Mesh(new THREE.PlaneGeometry(160, 9.5), asphaltMat);
+    townAvenue.rotateX(-Math.PI / 2);
+    townAvenue.position.set(20, terraceElev + 0.05, 8);
+    townAvenue.receiveShadow = true;
+    urbanGroup.add(townAvenue);
+
+    const crossStreet = new THREE.Mesh(new THREE.PlaneGeometry(8.5, 95), asphaltMat);
+    crossStreet.rotateX(-Math.PI / 2);
+    crossStreet.position.set(35, terraceElev + 0.055, 0);
+    crossStreet.receiveShadow = true;
+    urbanGroup.add(crossStreet);
+
+    // 1. Central Town Square Plaza
+    const plaza = new THREE.Mesh(new THREE.PlaneGeometry(38, 28), plazaMat);
+    plaza.rotateX(-Math.PI / 2);
+    plaza.position.set(35, terraceElev + 0.06, 8);
+    plaza.receiveShadow = true;
+    urbanGroup.add(plaza);
+
+    // Civic Fountain Basin in Town Square Center
+    const fountainBasin = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 4.0, 0.9, 12), stoneWallMat);
+    fountainBasin.position.set(35, terraceElev + 0.45, 8);
+    urbanGroup.add(fountainBasin);
+
+    const fountainWater = new THREE.Mesh(new THREE.CircleGeometry(3.2, 12), waterBasinMat);
+    fountainWater.rotateX(-Math.PI / 2);
+    fountainWater.position.set(35, terraceElev + 0.85, 8);
+    urbanGroup.add(fountainWater);
+
+    const fountainSpire = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.6, 2.4, 8), stoneWallMat);
+    fountainSpire.position.set(35, terraceElev + 1.8, 8);
+    urbanGroup.add(fountainSpire);
+
+    // 2. Municipal Town Hall / Administrative Headquarters (Centerpiece)
+    const townHall = new THREE.Group();
+    townHall.position.set(35, terraceElev, -10);
+
+    // Stone Plinth Foundation
+    const thPlinth = new THREE.Mesh(new THREE.BoxGeometry(24, 0.9, 16), stoneWallMat);
+    thPlinth.position.y = 0.45;
+    thPlinth.castShadow = true;
+    thPlinth.receiveShadow = true;
+    townHall.add(thPlinth);
+
+    // Main 2-Story Building Body (Warm Stucco)
+    const thBody = new THREE.Mesh(
+      new THREE.BoxGeometry(22, 7.8, 14.5),
+      new THREE.MeshStandardMaterial({ color: '#EDE8DE', roughness: 0.82 })
+    );
+    thBody.position.y = 0.9 + 3.9;
+    thBody.castShadow = true;
+    thBody.receiveShadow = true;
+    townHall.add(thBody);
+
+    // Classical Entrance Portico (4 Square Columns)
+    const colMat = new THREE.MeshStandardMaterial({ color: '#F5F5F4', roughness: 0.75 });
+    for (const cx of [-4.5, -1.5, 1.5, 4.5]) {
+      const col = new THREE.Mesh(new THREE.BoxGeometry(0.8, 5.2, 0.8), colMat);
+      col.position.set(cx, 0.9 + 2.6, 7.8);
+      col.castShadow = true;
+      townHall.add(col);
+    }
+    const pediment = new THREE.Mesh(new THREE.BoxGeometry(11.5, 1.2, 2.6), colMat);
+    pediment.position.set(0, 0.9 + 5.6, 7.8);
+    townHall.add(pediment);
+
+    // Double Grand Entrance Doors
+    const thDoor = new THREE.Mesh(
+      new THREE.BoxGeometry(2.6, 3.4, 0.25),
+      new THREE.MeshStandardMaterial({ color: '#27170E', roughness: 0.65 })
+    );
+    thDoor.position.set(0, 0.9 + 1.7, 7.3);
+    townHall.add(thDoor);
+
+    // Framed Windows (Row 1 & Row 2)
+    const glassMat = new THREE.MeshStandardMaterial({ color: '#93C5FD', roughness: 0.2, metalness: 0.85 });
+    for (const wy of [2.8, 6.2]) {
+      for (const wx of [-8.0, -4.5, 4.5, 8.0]) {
+        const win = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.0, 0.2), glassMat);
+        win.position.set(wx, 0.9 + wy, 7.35);
+        townHall.add(win);
+      }
+    }
+
+    // Terracotta Hipped Roof with Overhangs
+    const thRoof = new THREE.Mesh(
+      new THREE.ConeGeometry(17.5, 4.2, 4),
+      new THREE.MeshStandardMaterial({ color: '#C2410C', roughness: 0.72 })
+    );
+    thRoof.rotateY(Math.PI / 4);
+    thRoof.scale.set(1.0, 1.0, 14.5 / 22.0);
+    thRoof.position.y = 0.9 + 7.8 + 2.1;
+    thRoof.castShadow = true;
+    townHall.add(thRoof);
+
+    // Rooftop Clock Tower & Spire
+    const clockTower = new THREE.Mesh(new THREE.BoxGeometry(3.6, 4.5, 3.6), colMat);
+    clockTower.position.set(0, 0.9 + 7.8 + 4.2 + 2.25, 0);
+    townHall.add(clockTower);
+
+    const clockFace = new THREE.Mesh(new THREE.CircleGeometry(1.0, 16), new THREE.MeshBasicMaterial({ color: '#FFFFFF' }));
+    clockFace.position.set(0, 0.9 + 7.8 + 4.2 + 2.25, 1.85);
+    townHall.add(clockFace);
+
+    const spire = new THREE.Mesh(
+      new THREE.ConeGeometry(1.4, 3.2, 4),
+      new THREE.MeshStandardMaterial({ color: '#78350F', roughness: 0.6 })
+    );
+    spire.rotateY(Math.PI / 4);
+    spire.position.set(0, 0.9 + 7.8 + 4.2 + 4.5 + 1.6, 0);
+    townHall.add(spire);
+
+    urbanGroup.add(townHall);
+
+    // 3. Eight Modular Residential Houses
+    const houseConfigs = [
+      { x: 10, z: -38, w: 9.5, d: 8.0, h: 5.5, wall: '#E2E8F0', roof: '#B45309', rot: 0.12 },
+      { x: 42, z: -44, w: 10.5, d: 8.5, h: 6.0, wall: '#FEF3C7', roof: '#334155', rot: -0.08 },
+      { x: 74, z: -40, w: 9.0, d: 7.5, h: 5.2, wall: '#F1F5F9', roof: '#78350F', rot: 0.20 },
+      { x: 108, z: -34, w: 10.0, d: 8.0, h: 5.8, wall: '#EDE9FE', roof: '#1E3A2F', rot: -0.15 },
+      { x: 10, z: 42, w: 10.0, d: 8.2, h: 5.6, wall: '#FEE2E2', roof: '#C2410C', rot: -0.10 },
+      { x: 42, z: 48, w: 9.2, d: 8.5, h: 5.4, wall: '#E0F2FE', roof: '#1F2937', rot: 0.05 },
+      { x: 74, z: 44, w: 9.0, d: 8.0, h: 5.5, wall: '#ECFDF5', roof: '#B45309', rot: -0.12 },
+      { x: 108, z: 40, w: 11.5, d: 9.0, h: 6.8, wall: '#FFFBEB', roof: '#EA580C', rot: 0.18 },
+    ];
+
+    houseConfigs.forEach((hc) => {
+      const house = this.createBuilding(
+        hc.x,
+        hc.z,
+        terraceElev,
+        hc.w,
+        hc.d,
+        hc.h,
+        hc.wall,
+        hc.roof,
+        hc.rot,
+        true,
+        hc.z > 0 ? 'NORTH' : 'SOUTH'
+      );
+      this.ruralHouseMeshes.push(house);
+      urbanGroup.add(house);
+    });
+
+    // 4. Logistics Warehouse & Supply Depot
+    const warehouse = new THREE.Group();
+    warehouse.position.set(78, terraceElev, 14);
+
+    const whPlinth = new THREE.Mesh(new THREE.BoxGeometry(26, 0.6, 15), stoneWallMat);
+    whPlinth.position.y = 0.3;
+    warehouse.add(whPlinth);
+
+    const whBody = new THREE.Mesh(
+      new THREE.BoxGeometry(24, 6.8, 14),
+      new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.88 })
+    );
+    whBody.position.y = 0.6 + 3.4;
+    whBody.castShadow = true;
+    warehouse.add(whBody);
+
+    // Pitched Corrugated Metal Roof
+    const whRoof = new THREE.Mesh(
+      new THREE.ConeGeometry(17.5, 3.2, 4),
+      new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.65, metalness: 0.4 })
+    );
+    whRoof.rotateY(Math.PI / 4);
+    whRoof.scale.set(1.0, 1.0, 14.0 / 24.0);
+    whRoof.position.y = 0.6 + 6.8 + 1.6;
+    warehouse.add(whRoof);
+
+    // Roll-up Shutter Loading Door
+    const shutter = new THREE.Mesh(
+      new THREE.BoxGeometry(5.2, 4.2, 0.2),
+      new THREE.MeshStandardMaterial({ color: '#0F172A', roughness: 0.5, metalness: 0.5 })
+    );
+    shutter.position.set(-6.0, 0.6 + 2.1, 7.1);
+    warehouse.add(shutter);
+
+    // Wooden Cargo Pallets Outside Warehouse
+    for (let i = 0; i < 4; i++) {
+      const pallet = new THREE.Mesh(
+        new THREE.BoxGeometry(2.4, 1.4, 2.4),
+        new THREE.MeshStandardMaterial({ color: '#854D0E', roughness: 0.85 })
+      );
+      pallet.position.set(3.0 + i * 2.8, 0.6 + 0.7, 8.8);
+      warehouse.add(pallet);
+    }
+
+    urbanGroup.add(warehouse);
+
+    // 5. Technical Service Workshop
+    const workshop = this.createBuilding(10, 14, terraceElev, 13.5, 9.0, 5.0, '#CBD5E1', '#475569', 0, false);
+    urbanGroup.add(workshop);
+
+    // 6. Observation Lookout Watchtower on Elevated Ridge
+    const towerElev = this.terrain.getElevationAt(95, -95);
+    const towerGroup = new THREE.Group();
+    towerGroup.position.set(95, towerElev, -95);
+
+    const legMat = new THREE.MeshStandardMaterial({ color: '#4B5563', roughness: 0.7, metalness: 0.4 });
+    const cabMat = new THREE.MeshStandardMaterial({ color: '#FEF3C7', roughness: 0.8 });
+
+    // 4 Structural Columns
+    for (const lx of [-2.4, 2.4]) {
+      for (const lz of [-2.4, 2.4]) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.32, 20.0, 6), legMat);
+        leg.position.set(lx, 10.0, lz);
+        leg.castShadow = true;
+        towerGroup.add(leg);
+      }
+    }
+
+    // Cross-Girders (3 levels)
+    for (const gy of [5.0, 10.0, 15.0]) {
+      const ring = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.25, 5.0), legMat);
+      ring.position.y = gy;
+      towerGroup.add(ring);
+    }
+
+    // Top Observation Platform & Enclosed Cabin
+    const platform = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.4, 6.2), legMat);
+    platform.position.y = 20.2;
+    towerGroup.add(platform);
+
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(4.8, 3.2, 4.8), cabMat);
+    cab.position.y = 20.4 + 1.6;
+    cab.castShadow = true;
+    towerGroup.add(cab);
+
+    // Panoramic Catwalk Glass Windows
+    const towerGlass = new THREE.Mesh(new THREE.BoxGeometry(5.0, 1.4, 5.0), glassMat);
+    towerGlass.position.y = 20.4 + 1.8;
+    towerGroup.add(towerGlass);
+
+    // Pyramid Cabin Roof & Mast
+    const towerRoof = new THREE.Mesh(
+      new THREE.ConeGeometry(4.4, 2.2, 4),
+      new THREE.MeshStandardMaterial({ color: '#B45309', roughness: 0.65 })
+    );
+    towerRoof.rotateY(Math.PI / 4);
+    towerRoof.position.y = 20.4 + 3.2 + 1.1;
+    towerGroup.add(towerRoof);
+
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 4.5, 6), legMat);
+    mast.position.y = 20.4 + 3.2 + 2.2 + 2.25;
+    towerGroup.add(mast);
+
+    this.watchtowerMesh = towerGroup;
+    urbanGroup.add(towerGroup);
+
+    // 7. Urban Streetlamps
+    const lampCoords = [
+      { x: 18, z: 8 }, { x: 52, z: 8 }, { x: 18, z: -20 }, { x: 52, z: -20 },
+      { x: 88, z: -18 }, { x: 88, z: 12 }, { x: -10, z: 20 }, { x: -35, z: 24 }
+    ];
+    lampCoords.forEach((lp) => {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.14, 4.2, 6), legMat);
+      post.position.set(lp.x, terraceElev + 2.1, lp.z);
+      urbanGroup.add(post);
+
+      const globe = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 8), lampGlowMat);
+      globe.position.set(lp.x, terraceElev + 4.3, lp.z);
+      urbanGroup.add(globe);
+    });
+
+    this.urbanGroup = urbanGroup;
+    this.group.add(urbanGroup);
+  }
+
+  /**
+   * Helper: Generates a modular residential house with stone foundation,
+   * gabled roof, door, reflective windows, chimney, and covered porch.
+   */
+  private createBuilding(
+    x: number,
+    z: number,
+    baseElev: number,
+    w: number,
+    d: number,
+    h: number,
+    wallColor: string,
+    roofColor: string,
+    rotY: number = 0,
+    hasPorch: boolean = true,
+    porchSide: 'NORTH' | 'SOUTH' = 'SOUTH'
+  ): THREE.Group {
+    const bGroup = new THREE.Group();
+    bGroup.position.set(x, baseElev, z);
+    bGroup.rotation.y = rotY;
+
+    // Plinth Foundation
+    const plinthMat = new THREE.MeshStandardMaterial({ color: '#57534E', roughness: 0.90 });
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.6, d + 0.6), plinthMat);
+    plinth.position.y = 0.3;
+    plinth.castShadow = true;
+    plinth.receiveShadow = true;
+    bGroup.add(plinth);
+
+    // Main House Body
+    const wallMat = new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.82 });
+    const walls = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+    walls.position.y = 0.6 + h / 2;
+    walls.castShadow = true;
+    walls.receiveShadow = true;
+    bGroup.add(walls);
+
+    // Gabled Roof
+    const roofH = h * 0.48;
+    const roofMat = new THREE.MeshStandardMaterial({ color: roofColor, roughness: 0.72 });
+    const roofGeom = new THREE.ConeGeometry((w + 1.4) * 0.72, roofH, 4);
+    roofGeom.rotateY(Math.PI / 4);
+    roofGeom.scale(1.0, 1.0, (d + 1.4) / (w + 1.4));
+    const roof = new THREE.Mesh(roofGeom, roofMat);
+    roof.position.y = 0.6 + h + roofH / 2;
+    roof.castShadow = true;
+    roof.receiveShadow = true;
+    bGroup.add(roof);
+
+    // Door
+    const doorMat = new THREE.MeshStandardMaterial({ color: '#3E2723', roughness: 0.68 });
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.5, 0.2), doorMat);
+    const doorZ = porchSide === 'SOUTH' ? d / 2 + 0.05 : -d / 2 - 0.05;
+    door.position.set(0, 0.6 + 1.25, doorZ);
+    bGroup.add(door);
+
+    // Windows
+    const winMat = new THREE.MeshStandardMaterial({ color: '#93C5FD', roughness: 0.2, metalness: 0.82 });
+    const winL = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.6, 0.15), winMat);
+    winL.position.set(-w / 3.2, 0.6 + h * 0.55, doorZ);
+    bGroup.add(winL);
+
+    const winR = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.6, 0.15), winMat);
+    winR.position.set(w / 3.2, 0.6 + h * 0.55, doorZ);
+    bGroup.add(winR);
+
+    // Stone Chimney
+    const chimney = new THREE.Mesh(
+      new THREE.BoxGeometry(1.2, roofH + 1.6, 1.2),
+      new THREE.MeshStandardMaterial({ color: '#57534E', roughness: 0.92 })
+    );
+    chimney.position.set(w * 0.28, 0.6 + h + roofH * 0.6, 0);
+    chimney.castShadow = true;
+    bGroup.add(chimney);
+
+    // Covered Porch
+    if (hasPorch) {
+      const pDepth = 2.4;
+      const pZ = porchSide === 'SOUTH' ? d / 2 + pDepth / 2 : -d / 2 - pDepth / 2;
+      const pFloor = new THREE.Mesh(new THREE.BoxGeometry(w * 0.85, 0.25, pDepth), plinthMat);
+      pFloor.position.set(0, 0.125, pZ);
+      bGroup.add(pFloor);
+
+      const postMat = new THREE.MeshStandardMaterial({ color: '#78350F', roughness: 0.8 });
+      const pPost1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.5, 0.2), postMat);
+      pPost1.position.set(-w * 0.38, 1.25, porchSide === 'SOUTH' ? d / 2 + pDepth - 0.2 : -d / 2 - pDepth + 0.2);
+      bGroup.add(pPost1);
+
+      const pPost2 = pPost1.clone();
+      pPost2.position.x = w * 0.38;
+      bGroup.add(pPost2);
+
+      const pRoof = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.22, pDepth + 0.4), roofMat);
+      pRoof.position.set(0, 2.6, pZ);
+      pRoof.castShadow = true;
+      bGroup.add(pRoof);
+    }
+
+    return bGroup;
   }
 
   /**
@@ -216,32 +744,31 @@ export class LandscapeEcosystemManager {
       };
     }
 
-    // 2. Dirt Road & Timber River Footbridge Firebreak
-    const distToBridge = Math.hypot(x - (-235), z - 30);
-    if (this.getDistanceToRoad(x, z) <= 6.0 || distToBridge < 14.0) {
+    // 2. Full-Span River Bridge & Road Network Firebreak
+    const isBridgeSpan = x >= -285 && x <= -110 && Math.abs(z - 30) <= 8.0;
+    if (this.getDistanceToRoad(x, z) <= 6.5 || isBridgeSpan) {
       return {
         type: 'DIRT_ROAD',
-        name: 'Dirt Access Road & River Bridge',
+        name: 'Highway Road & Full-Span River Bridge',
         isBurnable: false,
         fuelLoadKgM2: 0.0,
         moistureOfExtinction: 0.0,
         baseSpreadMultiplier: 0.0,
-        description: 'Compacted mineral soil and wooden timber bridge; non-burnable defensible firebreak.',
+        description: 'Compacted road network and reinforced concrete/timber bridge; permanent firebreak.',
       };
     }
 
-    // 3. Developed Rural Settlement Outpost, Cabins & Watchtower Yard
-    const distToSettlement = Math.hypot(x - 30, z - 15);
-    const distToTower = Math.hypot(x - 90, z - (-100));
-    if (distToSettlement < 38.0 || distToTower < 18.0) {
+    // 3. Urban Settlement & Infrastructure District
+    const isUrbanDistrict = x >= -20 && x <= 155 && z >= -115 && z <= 90;
+    if (isUrbanDistrict) {
       return {
         type: 'BUILDING_DEVELOPED',
-        name: 'Rural Settlement Clearings & Cabins',
+        name: 'Urban Settlement & Infrastructure District',
         isBurnable: false,
-        fuelLoadKgM2: 0.1,
-        moistureOfExtinction: 12.0,
+        fuelLoadKgM2: 0.0,
+        moistureOfExtinction: 10.0,
         baseSpreadMultiplier: 0.0,
-        description: 'Defensible cleared terrace around timber cabins, dwellings, and lookout tower.',
+        description: 'Civic town hall, residential dwellings, paved plaza, depot, and defensible urban buffers.',
       };
     }
 
@@ -258,9 +785,9 @@ export class LandscapeEcosystemManager {
       };
     }
 
-    // 5. Open Grassland & Savanna Clearings (Central Valley)
-    const distToClearingCenter = Math.hypot(x - 40, z - 60);
-    if (distToClearingCenter < 140.0) {
+    // 5. Open Grassland & Savanna Clearings
+    const distToClearingCenter = Math.hypot(x - 40, z - 130);
+    if (distToClearingCenter < 120.0) {
       return {
         type: 'DRY_GRASSLAND',
         name: 'Open Cured Grassland Clearing',
@@ -298,7 +825,8 @@ export class LandscapeEcosystemManager {
   }
 
   /**
-   * Asynchronously loads all 9 binary GLTF models and populates the 3D scene
+   * Asynchronously loads vegetation models (hardwood, conifer, palm, shrub, boulder)
+   * and populates natural ecological forest zones.
    */
   private async load3DAssets(): Promise<void> {
     const loader = new GLTFLoader();
@@ -310,96 +838,19 @@ export class LandscapeEcosystemManager {
         palmGltf,
         shrubGltf,
         boulderGltf,
-        cabinGltf,
-        houseGltf,
-        towerGltf,
-        bridgeGltf,
       ] = await Promise.all([
         loader.loadAsync('/models/tree_hardwood.glb'),
         loader.loadAsync('/models/tree_conifer.glb'),
         loader.loadAsync('/models/tree_palm.glb'),
         loader.loadAsync('/models/shrub_bush.glb'),
         loader.loadAsync('/models/rock_boulder.glb'),
-        loader.loadAsync('/models/cabin_station.glb'),
-        loader.loadAsync('/models/house_rural.glb'),
-        loader.loadAsync('/models/fire_tower.glb'),
-        loader.loadAsync('/models/bridge_timber.glb'),
       ]);
 
-      // 1. Place Ranger Station Cabin in the central clearing terrace
-      const cabin = cabinGltf.scene;
-      cabin.position.set(25, 26.5, -10);
-      cabin.scale.set(1.15, 1.15, 1.15);
-      cabin.rotation.y = 0.35;
-      cabin.traverse((c) => {
-        if ((c as THREE.Mesh).isMesh) {
-          c.castShadow = true;
-          c.receiveShadow = true;
-        }
-      });
-      this.cabinMesh = cabin;
-      this.group.add(cabin);
-
-      // 2. Place Rural Settlement Houses in the clearing terrace
-      const house1 = houseGltf.scene;
-      house1.position.set(45, 26.5, 15);
-      house1.scale.set(1.1, 1.1, 1.1);
-      house1.rotation.y = -0.25;
-      house1.traverse((c) => {
-        if ((c as THREE.Mesh).isMesh) {
-          c.castShadow = true;
-          c.receiveShadow = true;
-        }
-      });
-      this.ruralHouseMeshes.push(house1);
-      this.group.add(house1);
-
-      const house2 = houseGltf.scene.clone();
-      house2.position.set(15, 26.5, 35);
-      house2.scale.set(1.05, 1.05, 1.05);
-      house2.rotation.y = 0.45;
-      house2.traverse((c) => {
-        if ((c as THREE.Mesh).isMesh) {
-          c.castShadow = true;
-          c.receiveShadow = true;
-        }
-      });
-      this.ruralHouseMeshes.push(house2);
-      this.group.add(house2);
-
-      // 3. Place Fire Lookout Tower on the elevated ridge overlooking the settlement
-      const tower = towerGltf.scene;
-      tower.position.set(90, this.terrain.getElevationAt(90, -100), -100);
-      tower.scale.set(1.2, 1.2, 1.2);
-      tower.rotation.y = -0.45;
-      tower.traverse((c) => {
-        if ((c as THREE.Mesh).isMesh) {
-          c.castShadow = true;
-          c.receiveShadow = true;
-        }
-      });
-      this.watchtowerMesh = tower;
-      this.group.add(tower);
-
-      // 4. Place Timber River Footbridge across the river channel
-      const bridge = bridgeGltf.scene;
-      bridge.position.set(-235, 18.2, 30);
-      bridge.scale.set(1.4, 1.2, 1.4);
-      bridge.rotation.y = 1.15;
-      bridge.traverse((c) => {
-        if ((c as THREE.Mesh).isMesh) {
-          c.castShadow = true;
-          c.receiveShadow = true;
-        }
-      });
-      this.bridgeMesh = bridge;
-      this.group.add(bridge);
-
-      // 5. Build Instanced Meshes from parsed GLTF primitives
+      // Build Instanced Meshes from parsed GLTF primitives
       this.setupInstancedVegetation(hardwoodGltf, coniferGltf, palmGltf, shrubGltf, boulderGltf);
       this.isAssetsLoaded = true;
     } catch (err) {
-      console.warn('[LandscapeEcosystemManager] Asset loading error:', err);
+      console.warn('[LandscapeEcosystemManager] Vegetation asset loading:', err);
     }
   }
 

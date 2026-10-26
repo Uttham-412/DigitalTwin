@@ -421,13 +421,11 @@ export class AmazonVegetationEngine {
       // Strictly prevent tree crowns from blocking or overlapping the river water surface
       if (elev <= 19.5 || this.terrain.isWaterAt(x, z, 26.0)) continue;
 
-      // Keep settlement terrace, bridge crossing, and lookout tower completely clear
-      const distToSettlement = Math.hypot(x - 35, z - 10);
-      if (distToSettlement < 95) continue;
-      const distToBridge = Math.hypot(x - (-235), z - 30);
-      if (distToBridge < 32) continue;
-      const distToTower = Math.hypot(x - 90, z - (-100));
-      if (distToTower < 30) continue;
+      // Keep bridge crossing corridor completely clear from west bank to east bank
+      if (x >= -285 && x <= -105 && Math.abs(z - 30) < 22) continue;
+
+      // Keep the entire eastern urban settlement district completely clear of forest trees
+      if (x >= -15 && x <= 155 && z >= -115 && z <= 90) continue;
 
       const isRiverBank = elev > 19.5 && elev < 26.5;
 
