@@ -1,0 +1,257 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Section 5.4 - Coding and Pseudocodes</title>
+<style>
+  @page {
+    size: A4;
+    margin: 20mm 20mm 25mm 20mm;
+    @bottom-center {
+      content: counter(page);
+    }
+  }
+  body {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 11.5pt;
+    line-height: 1.45;
+    color: #111;
+    margin: 0;
+    padding: 0;
+  }
+  .header-institution {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1.5px solid #333;
+    padding-bottom: 4px;
+    margin-bottom: 18px;
+    font-size: 9.5pt;
+    font-weight: bold;
+    color: #444;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  h2 {
+    font-size: 15pt;
+    margin-top: 0;
+    margin-bottom: 12px;
+    color: #1a1a1a;
+  }
+  h3 {
+    font-size: 13pt;
+    margin-top: 14px;
+    margin-bottom: 8px;
+    color: #222;
+  }
+  p {
+    margin: 0 0 10px 0;
+    text-align: justify;
+    text-justify: inter-word;
+  }
+  ul {
+    margin: 6px 0 12px 20px;
+    padding: 0;
+  }
+  li {
+    margin-bottom: 6px;
+    text-align: justify;
+  }
+  .bullet-title {
+    font-weight: bold;
+    color: #111;
+  }
+  .algorithm-container {
+    background: #fafafa;
+    border: 1.5px solid #2b2b2b;
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin: 16px 0;
+    page-break-inside: avoid;
+  }
+  .algorithm-title {
+    font-weight: bold;
+    font-size: 11pt;
+    border-bottom: 1px solid #777;
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+    color: #0d1b2a;
+  }
+  .algorithm-io {
+    font-size: 10pt;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px dashed #bbb;
+  }
+  .algorithm-io strong {
+    color: #111;
+  }
+  pre {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 9pt;
+    line-height: 1.35;
+    margin: 0;
+    white-space: pre-wrap;
+    color: #1a202c;
+  }
+  .page-break {
+    page-break-before: always;
+  }
+  .footer-note {
+    font-size: 9pt;
+    color: #666;
+    text-align: center;
+    margin-top: 25px;
+    border-top: 1px solid #ccc;
+    padding-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header-institution">
+  <span>Department of AIML, CEC, Mangaluru</span>
+  <span>Chapter 5: System Implementation</span>
+</div>
+
+<h2>5.4 Coding and Pseudocodes</h2>
+
+<h3>5.4.1 Introduction</h3>
+<p>
+The coding phase converts system design models into executable software through frontend user interface components, geospatial coordinate mappers, backend services, satellite-data processing, U-Net inference, and physics-based fire-spread simulation. The frontend manages user interactions and visual presentation across both continental 3D globe (CesiumJS) and local ecosystem (Three.js) scales. The Python inference service processes multi-spectral model inputs to generate burned-area segmentation outputs. In parallel, independent simulation models calculate hypothetical fire progression parameters based on environmental and terrain conditions without altering the deep learning architecture.
+</p>
+
+<h3>5.4.2 Programming Style</h3>
+<p>
+The programming style used in the <strong>Digital Twin-Based Wildfire Detection and Prediction System</strong> focuses on keeping the code simple, organized, and easy to maintain. The application is divided into separate modules for frontend components, geospatial visualization, satellite-data processing, U-Net inference, and fire-spread simulation. This modular approach makes it straightforward to understand the logic and update individual modules without affecting the rest of the application.
+</p>
+
+<ul>
+  <li><span class="bullet-title">Names:</span> Meaningful names are assigned to files, functions, and components based on their explicit responsibility. For example, <code>UNetDetectionPanel.tsx</code> displays detection-related metrics and confidence masks, while <code>FireSpreadPanel.tsx</code> provides interactive controls for fire-spread analysis. <code>unetInferenceService.ts</code> coordinates inference communications, while <code>fireSpreadModel.ts</code> houses the directional rate-of-spread simulation mathematics. These explicit identifiers streamline code navigation and readability.</li>
+  <li><span class="bullet-title">Control Constructs:</span> Structured conditional statements evaluate coordinate validity, satellite imagery availability, and process status. Iterative loops support repeated mathematical execution, such as advancing fire front progression across successive future simulation horizons and calculating radial expansion across 36 directional sectors.</li>
+  <li><span class="bullet-title">Information Hiding:</span> Each module manages its domain responsibilities without leaking internal mechanics to surrounding components. For example, frontend panels present output visualizations without performing matrix tensor transformations or differential spread equations themselves. The inference service abstracts API communication, while the spread model isolates physics calculations.</li>
+  <li><span class="bullet-title">User-Defined Types:</span> TypeScript interfaces formalize data structures passed between components and services (e.g., <code>Coordinates</code>, <code>EnvironmentalInfo</code>, <code>DetectionResult</code>, and <code>SpreadResult</code>). This enforces type safety at compile time, prevents schema discrepancies, and enhances codebase maintainability.</li>
+  <li><span class="bullet-title">Nesting:</span> Nested control sequences guarantee proper execution order. For instance, the system validates that satellite coverage exists for a geographic bounding box before invoking deep learning segmentation routines. Similarly, barrier clamping checks are nested within radial sector ray-casting loops.</li>
+</ul>
+
+<div class="page-break"></div>
+
+<div class="header-institution">
+  <span>Department of AIML, CEC, Mangaluru</span>
+  <span>Chapter 5: System Implementation</span>
+</div>
+
+<h3>5.4.3 Pseudocodes</h3>
+
+<div class="algorithm-container">
+  <div class="algorithm-title">Algorithm 5.1: Satellite Data Validation and U-Net Burned-Area Detection</div>
+  <div class="algorithm-io">
+    <strong>Input:</strong> Target location <code>C_target</code> (Coordinates: lat, lon), Decision threshold &tau; = 0.65<br>
+    <strong>Output:</strong> Detection result <code>R_detect</code> (DetectionResult: binary mask M_bin, burned area %, vector boundary)
+  </div>
+<pre>
+BEGIN
+  1.  // Step 1: Input validation and data availability check (Nesting & Control Constructs)
+  2.  IF C_target.latitude is NULL OR C_target.longitude is NULL THEN
+  3.    RETURN Error: "Invalid geographical coordinates provided."
+  4.  END IF
+
+  5.  satelliteData &larr; unetInferenceService.checkDataAvailability(C_target)
+  6.  IF satelliteData.isAvailable == FALSE THEN
+  7.    RETURN Error: "No suitable Sentinel-2 multi-spectral imagery found."
+  8.  END IF
+
+  9.  // Step 2: 15-channel feature preparation (Information Hiding)
+  10. rawBands &larr; unetInferenceService.fetchBands(C_target)    // 12 bands: B01-B09, B11, B12
+  11. ndvi &larr; (rawBands.B08 - rawBands.B04) / (rawBands.B08 + rawBands.B04 + 1e-7)
+  12. nbr  &larr; (rawBands.B08 - rawBands.B12) / (rawBands.B08 + rawBands.B12 + 1e-7)
+  13. ndri &larr; (rawBands.B04 - rawBands.B02) / (rawBands.B04 + rawBands.B02 + 1e-7)
+  14. tensor15ch &larr; StackAndNormalize(rawBands, ndvi, nbr, ndri)
+
+  15. // Step 3: U-Net deep learning model inference
+  16. probabilityMap &larr; UNetModel.predict(tensor15ch)
+  17. countBurned &larr; 0
+
+  18. FOR EACH pixel (x, y) IN probabilityMap:
+  19.   IF probabilityMap[x, y] &gt;= &tau; THEN
+  20.     M_bin[x, y] &larr; 1
+  21.     countBurned &larr; countBurned + 1
+  22.   ELSE
+  23.     M_bin[x, y] &larr; 0
+  24.   END IF
+  25. END FOR
+
+  26. // Step 4: Package results into strongly-typed output
+  27. R_detect.burnedPercentage &larr; (countBurned / TotalPixels) * 100.0
+  28. R_detect.burnedAreaHa &larr; countBurned * 0.01             // 1 pixel (10m x 10m) = 0.01 ha
+  29. R_detect.vectorBoundary &larr; VectorizeMaskToGeoJSON(M_bin)
+  30. R_detect.status &larr; "SUCCESS"
+
+  31. RETURN R_detect
+END
+</pre>
+</div>
+
+<div class="algorithm-container">
+  <div class="algorithm-title">Algorithm 5.2: Multi-Time-Step Fire-Spread Simulation and Cesium 3D Visualization</div>
+  <div class="algorithm-io">
+    <strong>Input:</strong> Ignition point <code>P_ign</code> (Coordinates), Weather <code>E_env</code> (EnvironmentalInfo), Horizons <code>H = [0, 1, 2, 6, 12, 24]</code><br>
+    <strong>Output:</strong> Simulation result <code>S_spread</code> (SpreadResult: per-time-step radial expansion and 3D terrain layers)
+  </div>
+<pre>
+BEGIN
+  1.  // Step 1: Validate ignition point combustibility
+  2.  IF fireSpreadModel.isWaterOrNonBurnable(P_ign) == TRUE THEN
+  3.    RETURN Error: "Ignition point is located on water or non-combustible surface."
+  4.  END IF
+
+  5.  // Step 2: Compute baseline fuel moisture and Rothermel damping factor
+  6.  fuelMoisture &larr; fireSpreadModel.computeEMC(E_env.temperature, E_env.humidity)
+  7.  dampingEta &larr; fireSpreadModel.computeMoistureDamping(fuelMoisture)
+  8.  baseROS &larr; 2.5 * dampingEta                         // Base rate of spread in m/min
+
+  9.  // Step 3: Loop through each simulation horizon (Control Constructs &amp; Loops)
+  10. FOR EACH horizon t IN H:
+  11.   boundaryPoints &larr; EMPTY_LIST
+
+  12.   // Sub-step: Calculate directional propagation across 36 sectors (&Delta;&theta; = 10&deg;)
+  13.   FOR sectorAngle FROM 0 TO 350 STEP 10:
+  14.     phiWind &larr; fireSpreadModel.calculateWindFactor(E_env.windSpeed, E_env.windHeading, sectorAngle)
+  15.     phiSlope &larr; fireSpreadModel.calculateSlopeFactor(P_ign, sectorAngle)
+  16.     rosSector &larr; baseROS * phiWind * phiSlope
+  17.     intendedRadius &larr; rosSector * 60.0 * t          // Expansion distance in meters
+
+  18.     // Barrier checking: Halt spread if water body or road is encountered
+  19.     clampedRadius &larr; intendedRadius
+  20.     FOR dist FROM 25.0 TO intendedRadius STEP 25.0:
+  21.       probePt &larr; ProjectCoordinate(P_ign, dist, sectorAngle)
+  22.       IF fireSpreadModel.isWaterOrNonBurnable(probePt) == TRUE THEN
+  23.         clampedRadius &larr; dist - 25.0
+  24.         BREAK                                      // Clamp fire front at barrier edge
+  25.       END IF
+  26.     END FOR
+
+  27.     boundaryPoints.APPEND(ProjectCoordinate(P_ign, clampedRadius, sectorAngle))
+  28.   END FOR
+
+  29.   // Step 4: Render updated fire perimeter on CesiumJS 3D terrain
+  30.   perimeterPolygon &larr; CreatePolygonHierarchy(boundaryPoints)
+  31.   CesiumViewer.renderSpreadLayer(perimeterPolygon, clampToGround=TRUE)
+  32.   S_spread.timesteps[t] &larr; {perimeter: perimeterPolygon, burnedArea: CalcArea(boundaryPoints)}
+  33. END FOR
+
+  34. RETURN S_spread
+END
+</pre>
+</div>
+
+<h3>5.5 Summary</h3>
+<p>
+The system integrates Sentinel-1 SAR and Sentinel-2 satellite data processing with a trained U-Net model to identify burned areas and generate detection masks. Environmental and geographical information supports fire-spread simulation and risk-zone analysis, while CesiumJS provides interactive 3D visualization of terrain, affected regions, and simulated fire progression. The dashboard presents detection results, environmental conditions, and wildfire scenarios in a user-friendly interface. The modular architecture, structured coding practices, and TypeScript support improve readability, maintainability, and flexibility. Overall, the implementation provides an integrated platform for wildfire monitoring and analysis, although further validation and improved environmental data integration are needed to enhance the reliability of fire-spread simulations.
+</p>
+
+<div class="footer-note">
+  Land8Fire Digital Twin Project Report &bull; Department of AIML, Canara Engineering College, Mangaluru
+</div>
+
+</body>
+</html>
